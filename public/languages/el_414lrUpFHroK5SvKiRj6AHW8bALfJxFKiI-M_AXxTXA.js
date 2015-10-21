@@ -1,0 +1,1 @@
+Drupal.locale = { 'strings': {"":{"Other":"\u0386\u03bb\u03bb\u03bf"}} };
