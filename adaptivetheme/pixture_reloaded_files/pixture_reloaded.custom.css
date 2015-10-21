@@ -1,0 +1,37 @@
+/* Add any valid CSS declarations */
+
+/*All code below was added by Bert B*/
+
+/* Sidebar block borders */
+/*.sidebar .block-inner {
+  border: 1px solid #e1e1e1;
+  padding: 10px;
+} */
+
+/* Menu bar block borders */
+/*.clearfix .menu  {
+  border: 1px solid #e1e1e1;
+  padding: 10px;
+}*/
+
+/*This first part works. Unfortunately it's not the effect I was looking for, but if you remove the comment signs around this paragraph, it proves I found the right classes to target with custom CSS.*/
+
+/*li.leaf.menu-depth-1.menu-item-218:hover {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-324:hover {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-510:hover {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-6586:hover {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-2702:hover {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-6396:hover {background-color: #86B50F;}*/
+
+/*This part does not work. 
+I see two possible causes:
+Drupal does not consider the link to be active. It only considers the menu items in the blocks on the side active. I think this is the most likely problem, but I have no idea how to fix this.
+I googled a bit and found that the :active selector must come after the :hover selector. Maybe there is another :hover declaration later on (the one that underlines the menu item), which prevents the :active selectors below to be shown?*/
+
+/*li.leaf.menu-depth-1.menu-item-218:active {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-324:active {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-510:active {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-6586:active {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-2702:active {background-color: #86B50F;}
+li.leaf.menu-depth-1.menu-item-6396:active {background-color: #86B50F;}*/
+
