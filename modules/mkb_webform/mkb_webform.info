@@ -1,0 +1,16 @@
+; $Id$
+; Read more about Drupal 7 .info files here: http://drupal.org/node/542202
+name = MKB Webform
+description = MKB Webform
+package = Meta Knowledge Base
+version = "7.x-1.0"
+core = 7.x
+php = 5.3
+files[] = mkb_webform.inc
+files[] = mkb_webform.module
+
+; Dependencies
+dependencies[] = views
+
+; Stylesheet
+stylesheets[all][] = css/mkb_webform.css

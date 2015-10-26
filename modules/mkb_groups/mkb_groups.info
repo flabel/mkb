@@ -1,0 +1,166 @@
+; General
+name = MKB Groups
+description = Enables MKB implementation and enlargement of Organic Groups
+core = 7.x
+package = Meta Knowledge Base
+version = 7.x-1.1
+project = mkb_groups
+
+; Dependencies
+dependencies[] = og_access
+dependencies[] = og_context
+dependencies[] = og_ui
+dependencies[] = profile2_og_access
+dependencies[] = views
+dependencies[] = views_content
+dependencies[] = mkb_call_admin
+
+; Stylesheet
+stylesheets[all][] = css/mkb_groups.css
+
+; Feature settings mkb_groups.feature.inc
+features[ctools][] = page_manager:pages_default:1
+features[ctools][] = strongarm:strongarm:1
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2
+
+; Filds
+features[field_base][] = field_group_application
+features[field_base][] = field_group_attachment
+features[field_base][] = group_access
+features[field_base][] = group_group
+features[field_base][] = og_group_ref
+
+; Field instance
+features[field_instance][] = node-group-body
+features[field_instance][] = node-group-field_group_application
+features[field_instance][] = node-group-group_access
+features[field_instance][] = node-group-group_group
+features[field_instance][] = node-group_docs-field_group_attachment
+features[field_instance][] = node-group_docs-og_group_ref
+features[field_instance][] = node-page-body
+features[field_instance][] = node-post-body
+features[field_instance][] = node-post-og_group_ref
+
+; Content types
+features[node][] = group
+features[node][] = group_docs
+features[node][] = post
+features[node][] = page
+
+; Node export
+
+; 1. Partnering with User Groups
+features[node_export_features][] = 957d008c-8f14-4707-bd7f-07ca4df36ee7
+; 2. How to manage your group
+features[node_export_features][] = 5ca69e93-e378-4939-ada2-64a6b40d7305
+
+; OG permissions
+features[og_features_permission][] = node:group:add user
+features[og_features_permission][] = node:group:administer group
+features[og_features_permission][] = node:group:approve and deny subscription
+features[og_features_permission][] = node:group:create group_docs content
+features[og_features_permission][] = node:group:create post content
+features[og_features_permission][] = node:group:delete any group_docs content
+features[og_features_permission][] = node:group:delete any post content
+features[og_features_permission][] = node:group:delete own group_docs content
+features[og_features_permission][] = node:group:delete own post content
+features[og_features_permission][] = node:group:edit any main profile
+features[og_features_permission][] = node:group:manage members
+features[og_features_permission][] = node:group:manage permissions
+features[og_features_permission][] = node:group:manage roles
+features[og_features_permission][] = node:group:subscribe
+features[og_features_permission][] = node:group:subscribe without approval
+features[og_features_permission][] = node:group:unsubscribe
+features[og_features_permission][] = node:group:update any group_docs content
+features[og_features_permission][] = node:group:update any post content
+features[og_features_permission][] = node:group:update group
+features[og_features_permission][] = node:group:update own group_docs content
+features[og_features_permission][] = node:group:update own post content
+features[og_features_permission][] = node:group:view any main profile
+
+; OG roles
+features[og_features_role][] = node:group:administrator
+features[og_features_role][] = node:group:project coordinator
+
+; Pages
+features[page_manager_pages][] = groups_work_space_forum
+features[page_manager_pages][] = groups_work_space_members
+features[page_manager_pages][] = groups_workspace_user_profiles
+
+; User permissions
+features[user_permission][] = create group content
+features[user_permission][] = create group_docs content
+features[user_permission][] = create post content
+features[user_permission][] = delete any group content
+features[user_permission][] = delete any group_docs content
+features[user_permission][] = delete any post content
+features[user_permission][] = delete own group content
+features[user_permission][] = delete own group_docs content
+features[user_permission][] = delete own post content
+features[user_permission][] = edit any group content
+features[user_permission][] = edit any group_docs content
+features[user_permission][] = edit any post content
+features[user_permission][] = edit own group content
+features[user_permission][] = edit own group_docs content
+features[user_permission][] = edit own post content
+
+; Strongarm variables
+features[variable][] = comment_anonymous_group
+features[variable][] = comment_anonymous_group_docs
+features[variable][] = comment_anonymous_page
+features[variable][] = comment_anonymous_post
+features[variable][] = comment_default_mode_group
+features[variable][] = comment_default_mode_group_docs
+features[variable][] = comment_default_mode_page
+features[variable][] = comment_default_mode_post
+features[variable][] = comment_default_per_page_group
+features[variable][] = comment_default_per_page_group_docs
+features[variable][] = comment_default_per_page_page
+features[variable][] = comment_default_per_page_post
+features[variable][] = comment_group
+features[variable][] = comment_group_docs
+features[variable][] = comment_page
+features[variable][] = comment_post
+features[variable][] = comment_preview_group
+features[variable][] = comment_preview_group_docs
+features[variable][] = comment_preview_page
+features[variable][] = comment_preview_post
+features[variable][] = comment_subject_field_group
+features[variable][] = comment_subject_field_group_docs
+features[variable][] = comment_subject_field_page
+features[variable][] = comment_subject_field_post
+features[variable][] = content_access_group
+features[variable][] = field_bundle_settings_node__group
+features[variable][] = field_bundle_settings_node__group_docs
+features[variable][] = field_bundle_settings_node__page
+features[variable][] = menu_options_group
+features[variable][] = menu_options_group_docs
+features[variable][] = menu_options_page
+features[variable][] = menu_options_post
+features[variable][] = menu_parent_group
+features[variable][] = menu_parent_group_docs
+features[variable][] = menu_parent_page
+features[variable][] = menu_parent_post
+features[variable][] = node_options_group
+features[variable][] = node_options_group_docs
+features[variable][] = node_options_page
+features[variable][] = node_options_post
+features[variable][] = node_preview_group
+features[variable][] = node_preview_group_docs
+features[variable][] = node_preview_page
+features[variable][] = node_preview_post
+features[variable][] = node_submitted_group
+features[variable][] = node_submitted_group_docs
+features[variable][] = node_submitted_page
+features[variable][] = node_submitted_post
+features[views_view][] = groups_ws_forum
+features[views_view][] = groups_ws_members
+
+; Exclude dependencies
+features_exclude[dependencies][ctools] = ctools
+features_exclude[dependencies][entityreference] = entityreference
+features_exclude[dependencies][features] = features
+features_exclude[dependencies][list] = list
+features_exclude[dependencies][og] = og
+features_exclude[dependencies][options] = options

@@ -1,0 +1,20 @@
+Features:
+css			enabled
+templates	enabled
+views		enabled
+pages		disabled
+blocks		disabled
+
+views:
+organisations
+project_partners
+users
+users_without_mail
+user_profile
+organisations_edit
+organisations_my_edit
+user_profiles
+era_net_partners
+
+templates:
+views-view-table--user_profile.tpl.php

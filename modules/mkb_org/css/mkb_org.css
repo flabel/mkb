@@ -1,0 +1,12 @@
+.user_profile_wrapper p{
+  margin: 0px 0px;
+}
+
+#user_profile_tbl{
+  border-spacing:0px;
+  border-collapse:collapse !important;
+}
+
+#user_profile_tbl td{
+  padding: 0px 5px;
+}

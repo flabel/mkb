@@ -1,0 +1,158 @@
+<?php
+
+module_load_include('inc', 'mkb_basic', 'mkb_basic');
+
+/**
+ * @file
+ * Demonstrate basic module mkb.
+ */
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function mkb_basic_theme_registry_alter(&$theme_registry) {
+  // Defined path to current module.
+  $module_path = drupal_get_path('module', 'mkb_basic');
+  // Find all .tpl.php files in this module's folder recursively.
+  $template_file_objects = drupal_find_theme_templates($theme_registry, '.tpl.php', $module_path);
+  // Itterate through all found template file objects.
+  foreach ($template_file_objects as $key => $template_file_object) {
+    // If the template has not already been overridden by a theme.
+    if (!preg_match('#/themes/#', $theme_registry[$key]['theme path'])) {
+      // Alter the theme path and template elements.
+      $theme_registry[$key]['theme path'] = $module_path;
+      $theme_registry[$key] = array_merge($theme_registry[$key], $template_file_object);
+    }
+  }
+}
+
+/**
+ *	Removal of duplicates in view Group members (custom) (user)
+ *
+ *  Just go into your query comments and type in "groupby:" with
+ *  that colon followed by the field you want to group by.
+ *
+ *  Examples...
+ *  groupby:node.nid
+ *  groupby:file_managed_file_usage.fid
+ */
+function mkb_basic_query_alter(QueryAlterableInterface $query) {
+  if ($query->hasTag('views')) {
+    static $count;
+    $view = $query->getMetaData('view');
+
+    if (strstr($groupby = $view->query->options['query_comment'], 'groupby')) {
+      list($action, $field) = explode(':', $groupby);
+
+      if (strlen($field) > 0) {
+        $query->groupBy($field);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_basic_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == "views_form_users_page") { 
+    $form = mkb_basic_mail($form, $form_state, $form_id);
+  }
+  if ($form_id == "views_form_mail_list_page") {
+    $form = mkb_basic_mail($form, $form_state, $form_id);
+  }
+  if ($form_id == "views_form_mail_list_country_page") {
+    $form = mkb_basic_mail($form, $form_state, $form_id);
+  }
+
+  // MODIFIES EVENT REGISTRATION FORM
+  if ($form_id == "event_registration_node_form") {
+   	$url_comp = explode('/', request_uri());
+	if (isset($url_comp[4])) {
+   	  $sub_comp = explode('?', $url_comp[4]);
+	  if (is_numeric($sub_comp[0])) $event_id = $sub_comp[0];
+	}
+	if (isset($event_id)) {
+      $_GET['destination'] = 'project-event-registration/' . $event_id;
+      $form['field_event']['und']['#default_value'][0] = $event_id;
+	  $form['field_event']['#access'] = false;
+      $form['title']['#default_value'] = 'Event registration';
+	  $form['title']['#access'] = false;
+	
+      $query = db_select("realname", "x");
+      $query->addField("x", "realname", "realname");
+      $query->condition("x.uid", $form['uid']['#value'], "=");
+      $result = $query->execute()->fetchAll();
+      if ($result) {
+	    $participant = trim($result[0]->realname) . ' (' . $form['uid']['#value'] . ')';
+        if (!$form['field_participant']['und'][0]['target_id']['#default_value']) {
+	      $form['field_participant']['und'][0]['target_id']['#default_value'] = $participant;
+		}
+	  }
+    }
+  }
+  if($form_id == "user_register_form"){
+    if(isset($form['og_user_node'])){
+      // If it is required, don't unset the validator
+      if($form['og_user_node'][LANGUAGE_NONE]['#required']){
+	return;
+      }
+      else{
+	foreach($form['#validate'] as $index => $method){
+	  if($method == 'og_validate_widgets' || $method == 'og_form_group_reference_validate'){
+	    unset($form['#validate'][$index]);
+	  }
+	}
+	unset($form['og_user_node']);
+      }
+    }
+  }
+}
+
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_basic_mail($form, $form_state, $form_id) {
+
+  if (strpos($form_id, 'views_form_') === 0) {
+    $field = _views_send_get_field($form_state['build_info']['args'][0]);
+  }
+  // This form isn't used by Views Send.
+  if (empty($field)) {
+    return;
+  }
+
+  // Add the custom JS for this step of the form.
+  $form['#attached']['js'][] = drupal_get_path('module', 'mkb_basic') . '/js/views_send.js';
+
+  if ($form_state['step'] == 'views_form_views_form') {
+    $form['actions']['client']['#value'] = t('Open mail client');
+    $form['actions']['client']['#type'] = 'button';
+    $form['actions']['client']['#attributes'] = array('onclick' => 'Create_email("' . $form['#id'] . '")');
+    $form['actions']['client']['#executes_submit_callback'] = FALSE;
+  }
+
+  $index = 0;
+  $mail_field_name = "";
+  foreach($field->view->result as $res) {
+    if($index == 0){
+      while (list($key,$val) = each($res)) {
+        $key_pieces = explode("_", $key);
+        for($i=0; $i<count($key_pieces); $i++){
+          if($key_pieces[$i] == "mail"){
+            $mail_field_name = $key;
+          }
+        }
+      }
+    }
+
+    $form['views-form-users-page']['email-' . $index] = array(
+        '#type' => 'hidden',
+        '#value' => $res->$mail_field_name,
+        '#id' => 'email-' . $index);
+    $index++;
+  }
+  return $form;
+}
+

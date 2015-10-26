@@ -1,0 +1,25 @@
+.table_trimmed{
+	width: auto;
+    border: 1px solid black;
+}
+.table_trimmed td, .table_trimmed th{
+    border: 1px solid black;
+}
+.td_align_center{
+    text-align: center;
+}
+.mkb_label{
+	margin-bottom: 0.5em;
+}
+
+.table_trimmed_no_b{
+    width: auto;
+}
+.view-call-topics-setup fieldset{
+	margin: 0em;
+	padding: 0em;
+}
+.view-id-call_topics fieldset{
+    margin: 0em;
+    padding: 0em;
+}

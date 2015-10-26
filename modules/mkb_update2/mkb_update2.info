@@ -1,0 +1,10 @@
+; $Id$
+; Read more about Drupal 7 .info files here: http://drupal.org/node/542202
+name = MKB Update 2
+description = Form to update parent organisation
+package = Meta Knowledge Base
+version = 7.x-1.0
+core = 7.x
+php = 5.1
+files[] = mkb_update2.inc
+files[] = mkb_update2.module

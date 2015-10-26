@@ -1,0 +1,28 @@
+.group-provider-form-group  legend{
+  font-size: 1.2em !important;
+  font-weight: bold !important;
+}
+.provider_description {
+  font-size:1.2em !important;
+}
+#provider-header {
+  font-size:1.2em;
+}
+#provider-page {
+  font-size: 1.1em;
+  font-style: italic;
+  text-align: right;
+}
+.provider-overview-table {
+  border-width: 1px;
+  border-color: black;
+  border-style:solid;
+  vertical-align: top;
+}
+.provider-survey-table {
+  border-width: 1px;
+  border-color: grey;
+  border-style:solid;
+  vertical-align: top;
+  width: 75%;
+}

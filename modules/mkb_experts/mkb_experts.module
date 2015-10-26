@@ -1,0 +1,68 @@
+<?php
+/**
+ * @file
+ * Code for the mkb_experts module
+ */
+
+
+function mkb_experts_migrate(){
+  $nodes = node_load_multiple(array(), array('type' => 'evaluation_expert'));
+
+  foreach ($nodes as $nid => $node){
+    $node_wrapper = entity_metadata_wrapper('node', $node);
+
+    // title
+    $title = $node_wrapper->label();
+    // expertise area (eval_conf)
+    $expertise_area = $node_wrapper->field_expertise_area->value();
+    // expertise text
+    $expertise_text = $node_wrapper->field_expertise_text->value();
+    // future call contact
+    $expert_future = $node_wrapper->field_expert_future->value();
+    // User
+    $expert_user = $node_wrapper->field_expert_user->raw();
+
+    // Initiate node
+    $new_node = new stdClass();
+    $new_node->title = $title;
+    $new_node->type = "eval_expert_application";
+    node_object_prepare($new_node); // Sets some defaults. Invokes hook_prepare() and hook_node_prepare().
+    $new_node->language = 'en'; // Or e.g. 'en' if locale is enabled
+    $new_node->uid = $node->uid;
+    $new_node->status = 1; //(1 or 0): published or not
+    $new_node->promote = 0; //(1 or 0): promoted to front page
+    $new_node->comment = 1; // 0 = comments disabled, 1 = read only, 2 = read/write
+
+
+    // call id
+    $new_node->field_call_id[LANGUAGE_NONE][0]['target_id'] = 13796;
+
+    // Expertise area (eval_conf)
+    foreach ($expertise_area as $value){
+      if($value==0) $new_node->field_eval_conf_id[LANGUAGE_NONE][]['target_id'] = 15901;
+      if($value==1) $new_node->field_eval_conf_id[LANGUAGE_NONE][]['target_id'] = 15902;
+      if($value==2) $new_node->field_eval_conf_id[LANGUAGE_NONE][]['target_id'] = 15903;
+    }
+
+    // Expertise text
+    $new_node->field_expert_expertise[LANGUAGE_NONE][0] = array(
+        'value' =>  isset($expertise_text) ? $expertise_text : '',
+        'format' => NULL,
+        'safe_value' => isset($expertise_text) ? $expertise_text : '',
+        );
+
+    // future call contact
+    $new_node->field_expert_future_contact[LANGUAGE_NONE][0]['value'] = isset($expert_future) ? $expert_future : 0;
+
+    // User
+    $new_node->field_expert_usr[LANGUAGE_NONE][0]['target_id'] = isset($expert_user) ? $expert_user : 1;
+
+    // Selected
+    $new_node->field_expert_selected[LANGUAGE_NONE][0]['value'] = 0;
+
+
+    $new_node = node_submit($new_node); // Prepare node for saving
+    node_save($new_node);
+  }
+
+}

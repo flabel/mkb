@@ -1,0 +1,566 @@
+<?php
+/**
+ * @file
+ * Code for the MKB PDF feature.
+ */
+
+include_once 'mkb_pdf.features.inc';
+
+/**
+ * Implements hook_file_download()
+ */
+function mkb_pdf_file_download($uri) {
+  if(strpos($uri, "/pdf/")){
+    global $user;
+
+    // Get file and group
+    $query = db_select("file_managed", "file_managed");
+    $query->leftJoin("field_data_field_pdf_file", "pdf", "pdf.field_pdf_file_fid = file_managed.fid");
+    $query->leftJoin("og_membership", "og_membership", "og_membership.etid = pdf.entity_id");
+    $query->addField("file_managed", "fid", "fid");
+    $query->addField("og_membership", "gid", "gid");
+    $query
+    ->condition("file_managed.uri", $uri)
+    ->condition("og_membership.entity_type", "node");
+    $result = $query->execute()->fetchAll();
+
+    $gid = 0;
+    $fid = 0;
+    foreach($result as $row){
+      $gid = $row->gid;
+      $fid = $row->fid;
+    }
+    $file = file_load($fid);
+    $headers = file_get_content_headers($file);
+
+    // Check if user is a member of the group
+    $query = db_select("og_membership", "og_membership");
+    $query->addField("og_membership", "etid", "uid");
+    $query
+    ->condition("og_membership.gid", $gid)
+    ->condition("og_membership.entity_type", "user")
+    ->condition("og_membership.etid", $user->uid);
+    $result = $query->execute()->fetchField();
+    if($result !== FALSE) return $headers;
+
+    // Check if user is administrator or call administrator
+    if (in_array('administrator', $user->roles) || in_array('call administrator', $user->roles)) return $headers;
+
+    // Get the call this group belongs to.
+    $cid = mkb_application_get_call_main_nid($gid);
+
+    // Check if user is call manager or evaluator in any of the funder_pages in the call
+    $query = db_select("field_data_field_call_id", "field_call_id");
+    $query ->leftJoin("field_data_field_call_managers", "field_call_managers", "field_call_managers.entity_id = field_call_id.entity_id");
+    $query ->addField("field_call_managers", "entity_id", "nid");
+    $query
+    ->condition("field_call_id.bundle", 'call_funder_page')
+    ->condition("field_call_id.field_call_id_target_id", $cid)
+    ->condition("field_call_id.entity_type", 'node')
+    ->condition("field_call_managers.field_call_managers_target_id", $user->uid);
+    $result = $query->execute()->fetchAll();
+    if($result != FALSE) return $headers;
+
+    $query = db_select("field_data_field_call_id", "field_call_id");
+    $query ->leftJoin("field_data_field_evaluators", "field_evaluators", "field_evaluators.entity_id = field_call_id.entity_id");
+    $query ->addField("field_evaluators", "entity_id", "nid");
+    $query
+    ->condition("field_call_id.bundle", 'call_funder_page')
+    ->condition("field_call_id.field_call_id_target_id", $cid)
+    ->condition("field_call_id.entity_type", 'node')
+    ->condition("field_evaluators.field_evaluators_target_id", $user->uid);
+    $result = $query->execute()->fetchAll();
+    if($result != FALSE) return $headers;
+
+    // User does not have permissions to download this file
+    return -1;
+  }
+}
+
+/**
+ * @return $array
+ *   action info.
+ */
+function mkb_pdf_action_info() {
+  return array(
+    'mkb_pdf_all_call_applications_action' => array(
+      'type' => 'node',
+      'label' => t('Generate PDF files'),
+      'behavior' => array('changes_property'),
+      'configurable' => FALSE,
+      'vbo_configurable' => TRUE,
+      'triggers' => array('any'),
+    ),
+  );
+}
+
+/**
+ * This form will display after selecting row(s) in view and clicking execute.
+ * 
+ * @param $settings
+ *  settings from view
+ * @form_state
+ * 	form_state
+ * @return form
+ * 	form
+*/
+function mkb_pdf_all_call_applications_action_form($settings, &$form_state) {
+	// Current user
+  $account = $GLOBALS['user'];
+  $account = user_load($account->uid);
+  
+  $form = array();
+	// Author
+  $form['author'] = array(
+    '#type' => 'textfield', 
+    '#title' => 'Author', 
+    '#size' => 60, 
+    '#maxlength' => 128, 
+    '#required' => TRUE,
+    '#default_value' => isset($account->realname) ? $account->realname : 'None',
+  );
+	// Title
+  $form['title'] = array(
+    '#type' => 'textfield', 
+    '#title' => 'Title', 
+    '#size' => 60, 
+    '#maxlength' => 128, 
+    '#required' => TRUE,
+    '#default_value' => '',
+  );
+  	
+	// Type
+	$field_pdf_type = field_info_field('field_pdf_type');
+	$allowed_values= list_allowed_values($field_pdf_type);
+	$form['type'] = array(
+		'#type' => 'radios',
+		'#title' => 'PDF type',
+		'#default_value' => 0,
+		'#options' => $allowed_values,
+		'#description' => 'Choose the PDF type. If not pre- or full-proposal, please select as needed.',
+	);  
+  return $form;
+}
+
+/**
+ * @param $form
+ *  form
+ * @form_state
+ * 	form_state
+ * @return return
+ * 	array of form elements for the action function
+*/
+function mkb_pdf_all_call_applications_action_submit($form, $form_state) {
+  $return = array();
+  $return['author'] = $form_state['values']['author'];
+  $return['title'] = $form_state['values']['title'];
+  $return['type'] = $form_state['values']['type'];    
+  // Add view to form_state to use in mkb_pdf_all_call_applications_action
+  $return['storage']['view'] = $form_state['build_info']['args'][0]->result;
+  return $return;
+}
+
+/**
+ * Generates pdf files of all applications of a call.
+ * NOTE: This funtion is called for each row selected in the view.
+ *
+ * @param $node
+ *  Organisation node
+ * @context
+ * 	View context (Fields from mkb_providers_survey_mail_action_submit (subject, email and view)).
+*/
+function mkb_pdf_all_call_applications_action(&$node, $context) {
+dpm('mkb_pdf_all_call_applications_action');
+  // http://www.setasign.com/support/faq/fpdi/fpdi-with-tcpdf/ for details
+  require_once("sites/all/libraries/tcpdf/tcpdf.php");
+  require_once("sites/all/libraries/fpdi/fpdi.php");
+
+  // Current user
+  $account = $GLOBALS['user'];
+  $account = user_load($account->uid);
+  
+  // Data from form
+	$node_wrapper = entity_metadata_wrapper('node', $node);
+	$author = $node_wrapper->author->value();
+	$cid = $context['view_info']['arguments'][0];
+	$call = node_load($cid);
+	$call_wrapper = entity_metadata_wrapper('node', $call);
+
+	// Type from pdf_application
+	$field_pdf_type = field_info_field('field_pdf_type');
+	$allowed_values = list_allowed_values($field_pdf_type);
+	$type_int = $context['type'];
+	$type_str = $allowed_values[$type_int];
+
+	// Set dir
+	$dir = 'private://pdf/' . $cid;
+
+	// File info
+	$pdf_filename_realpath = drupal_realpath($dir) . '/' . $node->nid . '_' . preg_replace('/\s+/', '_', $type_str) . '.pdf';
+	$pdf_filename = $dir . '/' . $node->nid . '_' . preg_replace('/\s+/', '_', $type_str) . '.pdf';
+
+	// --- Initiate pdf_application node ---
+	// Check if application_pdf with file uri exist already
+  $query = db_select("file_managed", "f");
+  $query->leftJoin("field_data_field_pdf_file", "pdf_file", "pdf_file.field_pdf_file_fid = f.fid");
+  $query->leftJoin("node", "node", "node.nid = pdf_file.entity_id");
+  $query->addField("node", "nid", "nid");
+  $query
+		->condition('uri', $pdf_filename);
+  $result = $query->execute();
+  $pdf_node_nid = $result->fetchField();	
+	
+	if($pdf_node_nid){
+		// Delete file reference and wrap application_pdf
+		$pdf_node = node_load($pdf_node_nid);
+		$pdf_wrapper = entity_metadata_wrapper('node', $pdf_node);
+		$pdf_wrapper->field_pdf_file->set(NULL);
+		$pdf_wrapper->save();
+		$pdf_node = node_load($pdf_node->nid);
+		$pdf_wrapper = entity_metadata_wrapper('node', $pdf_node);
+	}
+	else{
+		// Create application_pdf with entity wrapper
+		$values = array(
+			'type' => 'application_pdf',
+			'uid' => $account->uid,
+			'status' => 1,
+			'comment' => 1,
+			'promote' => 0,
+		);
+		$entity = entity_create('node', $values);
+		$pdf_wrapper = entity_metadata_wrapper('node', $entity);
+	}
+
+	// --- Create application page pdf file ---
+	$html = application_page_function($node->nid);
+
+	$pdf = new FPDI(); 
+	// set document information
+	$pdf->SetCreator(PDF_CREATOR);
+	$pdf->SetAuthor($context['author']);
+	$pdf->SetTitle($context['title']);
+	
+	
+	// ---------- PDF CUSTOMIZATION -------------
+	
+	// set default monospaced font
+	$pdf->SetDefaultMonospacedFont(PDF_FONT_MONOSPACED);
+
+	// set margins
+	$pdf->SetMargins(PDF_MARGIN_LEFT, PDF_MARGIN_TOP, PDF_MARGIN_RIGHT);
+	$pdf->SetHeaderMargin(PDF_MARGIN_HEADER);
+	$pdf->SetFooterMargin(PDF_MARGIN_FOOTER);
+
+	// set auto page breaks
+	$pdf->SetAutoPageBreak(TRUE, PDF_MARGIN_BOTTOM);
+
+	// set image scale factor
+	$pdf->setImageScale(PDF_IMAGE_SCALE_RATIO);
+
+	// set font
+	$pdf->SetFont('helvetica', '', 9);
+	
+	// Alter html
+	$html = mkb_pdf_application_page_html_alter($html);
+	//dpm($html);
+	
+	$pdf->AddPage();
+	
+	//// Print text using writeHTMLCell()
+	////$pdf->writeHTMLCell(0, 0, '', '', $html, 0, 1, 0, true, '', true);
+	$pdf->writeHTML($html, true, false, true, false, '');
+	
+	// reset pointer to the last page
+	$pdf->lastPage();	
+
+	// --- Get Application project-info and partner-budget pdf files ---
+	$files = array();
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', array('application_project_info', 'application_partner_info', 'application_partner_budget'), 'IN')
+    ->propertyCondition('status', 1)
+    ->fieldCondition('og_group_ref', 'target_id', $node->nid, '=');
+
+  $result = $query->execute();
+  if (!empty($result['node'])) {
+    $anids = array_keys($result['node']);
+    $anodes = node_load_multiple($anids);
+
+    foreach ($anodes as $anid => $anode){
+			$anode_wrapper = entity_metadata_wrapper('node', $anode);
+			if($anode->type == 'application_project_info'){
+				// Add title to pdf
+				$acronym = $anode_wrapper->field_app_acronym->value();
+				$pdf->SetSubject($acronym);
+				if(!empty($anode->field_attachments)){
+					foreach ($anode_wrapper->field_attachments->getIterator() as $delta => $field_attachments_wrapper) {
+						$file = $field_attachments_wrapper->value();
+						//$files[] = preg_replace('/\s+/', '\x20', drupal_realpath($file['uri']));
+						$files[] = drupal_realpath($file['uri']);
+					}
+				}
+				if(!empty($anode->field_app_dow)){
+					$file = $anode_wrapper->field_app_dow->value();
+					//$files[] = preg_replace('/\s+/', '\x20', drupal_realpath($file['uri']));
+					$files[] = drupal_realpath($file['uri']);
+				}
+			}
+			elseif($anode->type == 'application_partner_budget'){
+				if(!empty($anode->field_bud_documents)){
+					foreach ($anode_wrapper->field_bud_documents->getIterator() as $delta => $field_bud_documents_wrapper) {
+						$file = $field_bud_documents_wrapper->value();
+						//$files[] = preg_replace('/\s+/', '\x20', drupal_realpath($file['uri']));
+						$files[] = drupal_realpath($file['uri']);
+					}
+				}				
+			}
+    }
+  }
+  
+  // --- Merge all pdf files ---
+  if(!empty($files)){
+		for ($i = 0; $i < count($files); $i++ ){
+			$pagecount = $pdf->setSourceFile($files[$i]);
+			for($j = 0; $j < $pagecount ; $j++){
+					$tplIdx = $pdf->importPage(($j +1), '/MediaBox');
+					$pdf->addPage();// orientation can be P|L
+					//$pdf->useTemplate($tplIdx, 10, 10, 90);
+					$pdf->useTemplate($tplIdx); 
+			}
+		}
+	}
+	//  Check whether the folder pdf/cid/all inside sites/ict-agri.eu/files exists
+	if (!is_dir($dir)) {
+		//  Creates a folder and changes its permissions		
+		mkdir($dir, 0777, true);
+	}
+	$pdf->Output($pdf_filename_realpath, 'F');
+
+	// --- Finish pdf_application node ---
+	// Title
+	$pdf_title = isset($acronym) ? $acronym . ' - ' . $type_str : $type_str;
+	$pdf_wrapper->title->set($pdf_title);
+
+	// Group
+	$pdf_wrapper->og_group_ref[] = intval($node->nid);
+	
+	// Call
+	$pdf_wrapper->field_group_application->set(intval($cid));
+	
+	// Type
+	$pdf_wrapper->field_pdf_type->set(intval($type_int));
+	
+	// Call stage
+	$call_stage = $call_wrapper->field_current_stage->value();
+	if(isset($call_stage)) $pdf_wrapper->field_pdf_call_stage->set($call_stage);
+	
+	// PDF file
+	$pdf_file = mkb_pdf_create_file_obj($account, $pdf_filename);
+	$pdf_wrapper->field_pdf_file->file->set($pdf_file);	
+	
+	// Save entity
+	$pdf_wrapper->revision->set(1);
+	$pdf_wrapper->save();	
+	// --- ZIP pdf files when the last pdf file has been created and add it to call ---
+	if($context['progress']['current'] == $context['progress']['total']){
+		$files_to_zip = array();
+		$files = scandir($dir . "/");
+		foreach($files as $file) {
+			if(substr($file, -4) == '.pdf') $files_to_zip[] = drupal_realpath($dir) . '/' . $file;			
+		}
+		// Zip filename example: /volume1/web/dev/sites/ict-agri.eu/files/pdf/13796/all/13796_s1_Pre_proposal.zip
+		$zip_file_name = $dir . '/' . $cid . '_s' . $call_stage . '_' . preg_replace('/\s+/', '_', $type_str) . '.zip';
+		$zip_file_name_realpath = drupal_realpath($dir) . '/' . $cid . '_s' . $call_stage . '_' . preg_replace('/\s+/', '_', $type_str) . '.zip';
+		
+			// Create/Update call-main-page node
+		// Determine which field in call-main-page to use
+		if($type_int == 0) $file_field = 'field_call_as_needed_app_zip';
+		elseif($type_int == 1) $file_field = 'field_call_s1_app_zip';
+		else $file_field = 'field_call_s2_app_zip';
+		
+		// Delete zip file from disk and database if it exist
+		$zip_file_exist = FALSE;
+		foreach ($call_wrapper->{$file_field}->getIterator() as $delta => $file_wrapper) {
+			$file = $file_wrapper->value();
+			if($file['uri'] == $zip_file_name){
+				$zip_file_exist = TRUE;
+				$zip_file_to_delete = $file;
+				$zip_file_to_delete_index = $delta;
+			}
+		}
+
+		if($zip_file_exist){
+			$file_obj = file_load($zip_file_to_delete['fid']);
+			
+			$curr_list = $call_wrapper->{$file_field}->value();
+			unset($curr_list[$zip_file_to_delete_index]);
+			$call_wrapper->{$file_field}->set($curr_list);
+			
+			//$call_wrapper->{$file_field}[$i]->set(array());
+			file_usage_delete($file_obj, 'node');
+			file_delete($file_obj);
+			$call_wrapper->save();
+		}
+
+		// Create zip file on disk. Note: Last argument (override = true)
+		$result = mkb_pdf_create_zip($files_to_zip, $zip_file_name_realpath, true);
+
+		// Create zip file in database
+		if($result){
+			$call = node_load($cid);
+			$call_wrapper = entity_metadata_wrapper('node', $call);
+			$new_zip_file = mkb_pdf_create_file_obj($account, $zip_file_name, '');
+			$curr_list = $call_wrapper->{$file_field}->value();
+			if(!$curr_list) $curr_list = array();
+
+			$curr_list[] = (array) $new_zip_file;
+			$call_wrapper->{$file_field}->set($curr_list);
+			$call_wrapper->save();
+		}
+		else drupal_set_message('The zip file could not be generated. If the problem persist, please contact the administrator', 'warning');
+	}
+}
+
+function mkb_pdf_application_page_html_alter($html){
+	// Define inline styles from mkb_application/css/mkb_application.css and replace
+	//$th = '<th style="font-size:14px;font-weight:normal;padding-top:6px;padding-bottom:4px;">';
+	$th = '<th style="background-color:#2A98DF;">';
+	//$html = str_replace('<th>', $th, $html);
+	
+	// Table rows
+	$odd = 'style="background-color:#F5F5F5;"';
+	$html = str_replace('class="odd"', $odd, $html);
+	
+	$even = 'style="background-color:#FFFFFF;"';
+	$html = str_replace('class="even"', $even, $html);
+		
+	// Table cells
+	$td_align_right = 'style="text-align:right;valign:top;"';
+	$html = str_replace('class="td_align_right"', $td_align_right, $html);
+	
+	$td_align_center = 'style="text-align:center;"';
+	$html = str_replace('class="td_align_right"', $td_align_center, $html);
+	
+	$budget_table_0_1 =  'style="vertical-align:bottom;text-align:left;"';
+	$html = str_replace('class="budget_table_0_1"', $budget_table_0_1, $html);
+	
+	$budget_table_0 =  'style="text-align:center;border-bottom-style:solid;border-bottom-width:1px;border-bottom-color:#000000;"';
+	$html = str_replace('class="budget_table_0"', $budget_table_0, $html);
+	
+
+	// Add custom linebreaks in html
+	// http://stackoverflow.com/questions/1605860/manual-page-break-in-tcpdf
+	//<br pagebreak="true"/>
+	return $html;
+}
+
+function mkb_pdf_delete_file($wrapper, $file_field, $filename){
+	// Delete file from disk and database if it exist
+	$file_exist = FALSE;
+	foreach ($wrapper->{$file_field}->getIterator() as $delta => $file_wrapper) {
+		$file = $file_wrapper->value();
+		if($file['uri'] == $filename){
+			$file_exist = TRUE;
+			$file_to_delete = $file;
+			$file_to_delete_index = $delta;
+		}
+	}
+
+	if($file_exist){
+		$file_obj = file_load($file_to_delete['fid']);
+		
+		$curr_list = $wrapper->{$file_field}->value();
+		unset($curr_list[$file_to_delete_index]);
+		$wrapper->{$file_field}->set($curr_list);
+		
+		file_usage_delete($file_obj, 'node');
+		file_delete($file_obj);
+		$wrapper->save();
+	}
+	return $wrapper;
+}
+
+/**
+ * Creates a file an saves the file object to the database..
+ *
+ * @param $account
+ *  current user account
+ * @param $file_name
+ *  filename (e.g private://dow/example.pdf)
+ * @param $description (optional)
+ *  file description
+ * @return afile
+ * 	file object
+*/
+function mkb_pdf_create_file_obj($account, $file_name, $description = ''){
+	$file = new stdClass();
+	$file->filename = basename($file_name);
+	$file->filepath = $file_name;
+	$file->filemime = file_get_mimetype($file_name);
+	$file->filesize = filesize($file_name);
+	$file->uid = $account->uid;
+	$file->status = FILE_STATUS_PERMANENT;
+	$file->uri = $file_name;
+	$file->display = 1;
+	$file->description = $description;	
+	$afile = file_save($file);	
+	return $afile;	
+}
+
+
+/**
+ * Generates zip file from pdf.
+ *
+ * @param $files
+ *  files to zip
+ * @param $destination
+ *  destination for zip file
+ * @param $overwrite (optional)
+ *  overwrite option
+ * @return file_exist
+ * 	True if zip file has been created, otherwise false
+*/
+function mkb_pdf_create_zip($files = array(), $destination = '', $overwrite = false) {
+	//if the zip file already exists and overwrite is false, return false
+	if(file_exists($destination) && !$overwrite) { return false; }
+	//vars
+	$valid_files = array();
+	//if files were passed in...
+	if(is_array($files)) {
+		//cycle through each file
+		foreach($files as $file) {
+			//make sure the file exists
+			if(file_exists($file)) {
+				$valid_files[] = $file;
+			}
+		}
+	}
+	//if we have good files...
+	if(count($valid_files)) {
+		//create the archive
+		$zip = new ZipArchive();
+		if($zip->open($destination,$overwrite ? ZIPARCHIVE::OVERWRITE : ZIPARCHIVE::CREATE) !== true) {
+			return false;
+		}
+		//add the files
+		foreach($valid_files as $file) {
+			$pieces = explode('/', $file);
+			$file_name = $pieces[count($pieces)-1];
+			$zip->addFile($file,$file_name);
+		}
+		//debug
+		//echo 'The zip archive contains ',$zip->numFiles,' files with a status of ',$zip->status;
+		//dpm($zip);
+		
+		//close the zip -- done!
+		$zip->close();
+		
+		//check to make sure the file exists
+		return file_exists($destination);
+	}
+	else
+	{
+		return false;
+	}
+}

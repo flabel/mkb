@@ -1,0 +1,40 @@
+<?php
+
+module_load_include('inc', 'mkb_views_send', 'mkb_views_send');
+
+/**
+ * @file
+ * Demonstrate basic module mkb views send.
+ */
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_views_send_form_alter(&$form, &$form_state, $form_id) {
+
+  if (strpos($form_id, 'views_form_') === 0) {
+    $field = _views_send_get_field($form_state['build_info']['args'][0]);
+  }
+  // This form isn't used by Views Send.
+  if (empty($field)) {
+    return;
+  }
+  
+  // Add the custom JS for this step of the form.
+  $form['#attached']['js'][] = drupal_get_path('module', 'mkb_views_send') . '/views_send.js';
+  
+  if ($form_state['step'] == 'views_form_views_form') {
+    $form['actions']['client']['#value'] = t('Open mail client');
+    $form['actions']['client']['#type'] = 'button';
+    $form['actions']['client']['#attributes'] = array('onclick' => 'Create_email()');
+    $form['actions']['client']['#executes_submit_callback'] = FALSE;
+  }
+  $index = 0;
+  foreach($field->view->result as $res) {
+    $form['views-form-users-page']['email-' . $index] = array(
+        '#type' => 'hidden',
+        '#value' => $res->users_mail,
+        '#id' => 'email-' . $index);
+    $index++;
+  }
+}

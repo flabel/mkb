@@ -1,0 +1,12 @@
+; $Id$
+; Read more about Drupal 7 .info files here: http://drupal.org/node/542202
+name = MKB Basic
+description = Basic functionality for menus and views for events and forum
+dependencies[] = views
+package = Meta Knowledge Base
+version = "7.x-1.0"
+core = 7.x
+stylesheets[all][] = css/mkb_basic.css
+php = 5.3
+files[] = mkb_basic.inc
+files[] = mkb_basic.module

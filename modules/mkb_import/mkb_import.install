@@ -1,0 +1,31 @@
+<?php
+/**
+* Implements hook_enable().
+*/
+function mkb_import_enable() {
+  $language_list = language_list();
+  foreach ($language_list as $language_prefix => $language) {
+    // Need to remove '-'
+    $language_prefix = str_replace('-', '_', $language_prefix);
+    MigrationBase::registerMigration(
+      'OrganisationMigration',
+      'Organisation_' . $language_prefix,
+      array(
+        'class_name' => 'OrganisationMigration',
+        'group_name' => 'OrganisationMigrate',
+        'language_prefix' => $language_prefix,
+      )
+    );
+  }
+}
+/**
+* Implements hook_disable().
+*/
+function mkb_import_disable() {
+  $language_list = language_list();
+  foreach ($language_list as $language_prefix => $language) {
+    // Need to remove '-'
+    $language_prefix = str_replace('-', '_', $language_prefix);
+    Migration::deregisterMigration('Organisation_' . $language_prefix);
+  }
+}

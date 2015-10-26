@@ -1,0 +1,239 @@
+; General
+name = MKB Application
+description = Enables the creation of applications for calls
+core = 7.x
+package = Meta Knowledge Base
+version = 7.x-1.1
+project = mkb_application
+
+; Dependencies
+dependencies[] = mkb_call_admin
+dependencies[] = og_access
+dependencies[] = og_context
+dependencies[] = og_ui
+dependencies[] = profile2_og_access
+dependencies[] = views
+dependencies[] = views_content
+dependencies[] = node_export_features
+;dependencies[] = htmlmail
+;dependencies[] = mailsystem
+
+; Stylesheet
+stylesheets[all][] = css/mkb_application.css
+
+; Features settings mkb_application.features.inc
+features[ctools][] = strongarm:strongarm:1
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2
+
+; Fields
+features[field_base][] = body
+features[field_base][] = field_app_acronym
+features[field_base][] = field_app_additional_field_1
+features[field_base][] = field_app_additional_field_2
+features[field_base][] = field_app_additional_field_3
+features[field_base][] = field_app_additional_field_4
+features[field_base][] = field_app_additional_field_5
+features[field_base][] = field_app_dow
+features[field_base][] = field_app_duration
+features[field_base][] = field_app_expected
+features[field_base][] = field_app_keywords
+features[field_base][] = field_app_selected_1
+features[field_base][] = field_app_selected_2
+features[field_base][] = field_app_submit_time
+features[field_base][] = field_app_submit_time_2
+features[field_base][] = field_app_submitted
+features[field_base][] = field_app_submitted_2
+features[field_base][] = field_app_summary
+features[field_base][] = field_app_supplementory
+features[field_base][] = field_app_topics
+features[field_base][] = field_bud_budget_info
+features[field_base][] = field_bud_cs
+features[field_base][] = field_bud_eq
+features[field_base][] = field_bud_funding_scheme
+features[field_base][] = field_bud_ic
+features[field_base][] = field_bud_oc
+features[field_base][] = field_bud_pc
+features[field_base][] = field_bud_pm
+features[field_base][] = field_bud_sc
+features[field_base][] = field_bud_ts
+features[field_base][] = field_group_application
+features[field_base][] = field_group_attachment
+features[field_base][] = field_par_acronym
+features[field_base][] = field_par_additional_field_1
+features[field_base][] = field_par_additional_field_2
+features[field_base][] = field_par_additional_field_3
+features[field_base][] = field_par_additional_field_4
+features[field_base][] = field_par_additional_field_5
+features[field_base][] = field_par_business_plan
+features[field_base][] = field_par_publications
+features[field_base][] = field_par_role
+features[field_base][] = group_access
+features[field_base][] = group_group
+features[field_base][] = og_group_ref
+
+; Field instances
+features[field_instance][] = node-application_partner_budget-field_bud_budget_info
+features[field_instance][] = node-application_partner_budget-field_bud_cs
+features[field_instance][] = node-application_partner_budget-field_bud_eq
+features[field_instance][] = node-application_partner_budget-field_bud_funding_scheme
+features[field_instance][] = node-application_partner_budget-field_bud_ic
+features[field_instance][] = node-application_partner_budget-field_bud_oc
+features[field_instance][] = node-application_partner_budget-field_bud_pc
+features[field_instance][] = node-application_partner_budget-field_bud_pm
+features[field_instance][] = node-application_partner_budget-field_bud_sc
+features[field_instance][] = node-application_partner_budget-field_bud_ts
+features[field_instance][] = node-application_partner_info-field_par_acronym
+features[field_instance][] = node-application_partner_info-field_par_additional_field_1
+features[field_instance][] = node-application_partner_info-field_par_additional_field_2
+features[field_instance][] = node-application_partner_info-field_par_additional_field_3
+features[field_instance][] = node-application_partner_info-field_par_additional_field_4
+features[field_instance][] = node-application_partner_info-field_par_additional_field_5
+features[field_instance][] = node-application_partner_info-field_par_business_plan
+features[field_instance][] = node-application_partner_info-field_par_publications
+features[field_instance][] = node-application_partner_info-field_par_role
+features[field_instance][] = node-application_project_info-field_app_acronym
+features[field_instance][] = node-application_project_info-field_app_additional_field_1
+features[field_instance][] = node-application_project_info-field_app_additional_field_2
+features[field_instance][] = node-application_project_info-field_app_additional_field_3
+features[field_instance][] = node-application_project_info-field_app_additional_field_4
+features[field_instance][] = node-application_project_info-field_app_additional_field_5
+features[field_instance][] = node-application_project_info-field_app_dow
+features[field_instance][] = node-application_project_info-field_app_duration
+features[field_instance][] = node-application_project_info-field_app_expected
+features[field_instance][] = node-application_project_info-field_app_keywords
+features[field_instance][] = node-application_project_info-field_app_selected_1
+features[field_instance][] = node-application_project_info-field_app_selected_2
+features[field_instance][] = node-application_project_info-field_app_submit_time
+features[field_instance][] = node-application_project_info-field_app_submit_time_2
+features[field_instance][] = node-application_project_info-field_app_submitted
+features[field_instance][] = node-application_project_info-field_app_submitted_2
+features[field_instance][] = node-application_project_info-field_app_summary
+features[field_instance][] = node-application_project_info-field_app_supplementory
+features[field_instance][] = node-application_project_info-field_app_topics
+
+; Content types
+features[node][] = application_partner_budget
+features[node][] = application_partner_info
+features[node][] = application_project_info
+features[node][] = group
+features[node][] = group_docs
+features[node][] = page
+features[node][] = post
+
+; Node export
+
+; 1. How to apply
+features[node_export_features][] = 642e6311-1725-47b5-97c3-465dea98c871
+
+; Organic groups permissions
+features[og_features_permission][] = node:group:add user
+features[og_features_permission][] = node:group:administer group
+features[og_features_permission][] = node:group:approve and deny subscription
+features[og_features_permission][] = node:group:create application_partner_budget content
+features[og_features_permission][] = node:group:create application_partner_info content
+features[og_features_permission][] = node:group:create application_project_info content
+features[og_features_permission][] = node:group:create group_docs content
+features[og_features_permission][] = node:group:create post content
+features[og_features_permission][] = node:group:delete any application_partner_budget content
+features[og_features_permission][] = node:group:delete any application_partner_info content
+features[og_features_permission][] = node:group:delete any application_project_info content
+features[og_features_permission][] = node:group:delete any post content
+features[og_features_permission][] = node:group:delete own application_partner_budget content
+features[og_features_permission][] = node:group:delete own application_partner_info content
+features[og_features_permission][] = node:group:delete own application_project_info content
+features[og_features_permission][] = node:group:delete own group_docs content
+features[og_features_permission][] = node:group:delete own post content
+features[og_features_permission][] = node:group:edit any main profile
+features[og_features_permission][] = node:group:manage members
+features[og_features_permission][] = node:group:unsubscribe
+features[og_features_permission][] = node:group:update any application_partner_budget content
+features[og_features_permission][] = node:group:update any application_partner_info content
+features[og_features_permission][] = node:group:update any application_project_info content
+features[og_features_permission][] = node:group:update any group_docs content
+features[og_features_permission][] = node:group:update any post content
+features[og_features_permission][] = node:group:update group
+features[og_features_permission][] = node:group:update own application_partner_budget content
+features[og_features_permission][] = node:group:update own application_partner_info content
+features[og_features_permission][] = node:group:update own application_project_info content
+features[og_features_permission][] = node:group:update own group_docs content
+features[og_features_permission][] = node:group:update own post content
+features[og_features_permission][] = node:group:view any main profile
+
+; Organic groups roles
+features[og_features_role][] = node:group:project editor
+features[og_features_role][] = node:group:project partner
+
+; User permissions
+features[user_permission][] = create application_partner_budget content
+features[user_permission][] = create application_partner_info content
+features[user_permission][] = create application_project_info content
+features[user_permission][] = delete any application_partner_budget content
+features[user_permission][] = delete any application_partner_info content
+features[user_permission][] = delete any application_project_info content
+features[user_permission][] = delete own application_partner_budget content
+features[user_permission][] = delete own application_partner_info content
+features[user_permission][] = delete own application_project_info content
+features[user_permission][] = edit any application_partner_budget content
+features[user_permission][] = edit any application_partner_info content
+features[user_permission][] = edit any application_project_info content
+features[user_permission][] = edit own application_partner_budget content
+features[user_permission][] = edit own application_partner_info content
+features[user_permission][] = edit own application_project_info content
+
+; Strongarm variables
+features[variable][] = comment_anonymous_application_partner_budget
+features[variable][] = comment_anonymous_application_partner_info
+features[variable][] = comment_anonymous_application_project_info
+features[variable][] = comment_application_partner_budget
+features[variable][] = comment_application_partner_info
+features[variable][] = comment_application_project_info
+features[variable][] = comment_default_mode_application_partner_budget
+features[variable][] = comment_default_mode_application_partner_info
+features[variable][] = comment_default_mode_application_project_info
+features[variable][] = comment_default_per_page_application_partner_budget
+features[variable][] = comment_default_per_page_application_partner_info
+features[variable][] = comment_default_per_page_application_project_info
+features[variable][] = comment_form_location_application_partner_budget
+features[variable][] = comment_form_location_application_partner_info
+features[variable][] = comment_form_location_application_project_info
+features[variable][] = comment_preview_application_partner_budget
+features[variable][] = comment_preview_application_partner_info
+features[variable][] = comment_preview_application_project_info
+features[variable][] = comment_subject_field_application_partner_budget
+features[variable][] = comment_subject_field_application_partner_info
+features[variable][] = comment_subject_field_application_project_info
+features[variable][] = content_access_application_partner_budget
+features[variable][] = content_access_application_partner_info
+features[variable][] = content_access_application_project_info
+features[variable][] = field_bundle_settings_node__application_partner_budget
+features[variable][] = field_bundle_settings_node__application_partner_info
+features[variable][] = field_bundle_settings_node__application_project_info
+features[variable][] = menu_options_application_partner_budget
+features[variable][] = menu_options_application_partner_info
+features[variable][] = menu_options_application_project_info
+features[variable][] = menu_parent_application_partner_budget
+features[variable][] = menu_parent_application_partner_info
+features[variable][] = menu_parent_application_project_info
+features[variable][] = node_options_application_partner_budget
+features[variable][] = node_options_application_partner_info
+features[variable][] = node_options_application_project_info
+features[variable][] = node_preview_application_partner_budget
+features[variable][] = node_preview_application_partner_info
+features[variable][] = node_preview_application_project_info
+features[variable][] = node_submitted_application_partner_budget
+features[variable][] = node_submitted_application_partner_info
+features[variable][] = node_submitted_application_project_info
+
+; Views
+features[views_view][] = application_ws_call_funder_page
+features[views_view][] = application_ws_call_main_page
+
+; Exclude dependencies
+features_exclude[dependencies][ctools] = ctools
+features_exclude[dependencies][entityreference] = entityreference
+features_exclude[dependencies][features] = features
+features_exclude[dependencies][list] = list
+features_exclude[dependencies][og] = og
+features_exclude[dependencies][options] = options
+features_exclude[dependencies][node_export_features] = node_export_features

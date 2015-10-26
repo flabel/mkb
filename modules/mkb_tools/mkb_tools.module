@@ -1,0 +1,33 @@
+<?php
+
+module_load_include('inc', 'mkb_tools', 'mkb_tools');
+module_load_include('inc', 'mkb_tools', 'includes/pages/mkb_tools.views_usage');
+
+/**
+ * Implements hook_menu()
+ */
+function mkb_tools_menu(){
+  $items['mkb_tools/views_usage'] = array(
+    'title' => 'Views usage',
+    'description' => 'Views usage',
+    'page callback' => 'mkb_tools_views_usage_function',
+    'access arguments' => array('access content'),
+    'file' => 'includes/pages/mkb_tools.views_usage.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_tools_theme($existing, $type, $theme, $path) {
+  $templates = array (
+      'views_usage_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'views_usage',
+          'path' => drupal_get_path('module', 'mkb_tools') . '/theme',
+      ),
+  );
+  return $templates;
+}

@@ -1,0 +1,17 @@
+name = MKB Partner consultation
+description = Tools for project administration
+core = 7.x
+package = Meta Knowledge Base
+version = 7.x-1.0-beta1
+project = mkb_partner_consult
+dependencies[] = ctools
+dependencies[] = eck
+dependencies[] = eck
+dependencies[] = entityreference
+dependencies[] = features
+dependencies[] = list
+dependencies[] = options
+dependencies[] = strongarm
+dependencies[] = text
+dependencies[] = views
+stylesheets[all][] = css/mkb_partner_consult.css 

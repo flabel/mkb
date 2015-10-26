@@ -1,0 +1,177 @@
+<?php
+
+module_load_include('inc', 'mkb_org', 'mkb_org');
+
+/**
+ * @file
+ * Demonstrate module mkb organisation.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function mkb_update2_menu() {
+  $items = array();
+      $items['update_parent_org/%'] = array(
+      'title' => '',
+      'description' => t('Update parent organisation'),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mkb_update2_form'),
+      'access arguments' => array('access content'),
+      'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Page callback function.
+ */
+function mkb_update2_page(&$form_state){
+  $form = drupal_get_form('mkb_update2_form');
+  return $form;
+}
+
+function mkb_update2_form($form, &$form_state) {
+  $child_id = arg(1);
+  $child = node_load($child_id);
+  if (isset($child ->field_parent_organisation['und'][0]['target_id'])) $parent_id = $child ->field_parent_organisation['und'][0]['target_id'];
+  else $parent_id = '';
+  $nid_valid = FALSE;
+  if(isset($form_state['storage']['mkb_update2']['nid_valid'])) $nid_valid = $form_state['storage']['mkb_update2']['nid_valid'];
+  if(isset($form_state['storage']['mkb_update2']) && $nid_valid){
+    $new_parent_id = $form_state['storage']['mkb_update2']['parent_id'];
+  }
+  else{
+    $new_parent_id = $parent_id;
+  }
+  $parent = node_load($new_parent_id);
+  
+  $form = array();
+  $form['wrapper'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Update parent organisation'),
+    '#collapsible' => 0,
+    '#collapsed' => 0,
+  );
+
+  $form['wrapper']['child_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Child id'),
+    '#required' => 1,
+    '#default_value' => $child_id,
+    '#size' => 20,
+    '#maxlength' => 20,
+    '#access' => 0,
+  );
+ 
+  $form['wrapper']['parent_org_name'] = array();
+  if(isset($parent -> field_org_name['und'][0]['value'])){
+    $parent_org_name = $parent -> field_org_name['und'][0]['value'];
+    $form['wrapper']['parent_org_name']['#markup'] = '<p>Parent organisation:</br>' . $parent_org_name . '</p>';
+  }
+  else{
+        $form['wrapper']['parent_org_name']['#markup'] = '<p>Parent organisation:</br>None</p>';
+  }
+
+  $form['wrapper']['child_org_name'] = array();
+  $child_org_name = $child -> field_org_name['und'][0]['value'];
+  if(isset($child_org_name)){
+    $form['wrapper']['child_org_name']['#markup'] = '<p>This organisation:</br>' . $child_org_name . '</p>';
+  }
+  else{
+        $form['wrapper']['child_org_name']['#markup'] = '<p>This organisation:</br>None</p>';
+  }
+
+  $form['wrapper']['parent_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Input new parent id to update'),
+    '#required' => TRUE,
+    '#default_value' => $parent_id,
+    '#size' => 20,
+    '#maxlength' => 20,
+  );
+
+  $form['wrapper']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Submit',
+    '#submit' => array('mkb_update2_form_submit'),
+  );
+
+  $form['wrapper']['back'] = array();
+  if(isset($_SESSION['org_tree_nid'])){
+    $form['wrapper']['back']['#markup'] = '<p>' . l('Back to organisation tree', 'node/12442/' . $_SESSION['org_tree_nid']) . '</p>';
+  }
+
+  return $form;
+}
+
+function mkb_update2_form_submit($form, &$form_state) {
+  // Store values
+  $form_state['storage']['mkb_update2'] = $form_state['values'];
+
+  $child_id = $form_state['values']['child_id'];
+  $parent_id = $form_state['values']['parent_id'];
+
+  $nid = 0;
+  $query_nid = db_select("node", "n");
+  $query_nid
+  ->fields("n", array("nid"))
+  ->condition("n.nid", $parent_id)
+  ->condition("n.type", "organisation");
+  $result = $query_nid->execute();
+  $nid = $result->fetchField();
+
+  if($nid == 0 && $parent_id > 0){
+    drupal_set_message(t('Organisation ID does not exist'), 'error');
+    $form_state['storage']['mkb_update2']['nid_valid'] = FALSE;
+  }
+  elseif($parent_id == $child_id){
+    drupal_set_message(t('Illegal: Parent id same as this id'), 'error');
+    $form_state['storage']['mkb_update2']['nid_valid'] = FALSE;
+  }
+  else {
+  
+    $query = db_select('field_data_field_parent_organisation', 'pa')
+      -> fields('pa', array('field_parent_organisation_target_id'))
+      -> condition('entity_id', $child_id, '=');
+    $exist = $query -> execute() -> fetchAll();
+
+    if ($exist) {
+	  if ($parent_id > 0) { 
+		$query = db_update('field_data_field_parent_organisation')
+		->fields(array(
+		  'field_parent_organisation_target_id' => $parent_id,
+		  ))
+		->condition('entity_id', $child_id, '=')
+		->execute(); 
+	  }
+	  else { 
+		$query = db_delete('field_data_field_parent_organisation')
+		->condition('entity_id', $child_id, '=')
+		->execute(); 
+	  }
+	}
+	else {
+      $query = db_insert('field_data_field_parent_organisation')
+        -> fields(array(
+		  'entity_type' => 'node',
+		  'bundle' => 'organisation',
+		  'deleted' => 0,
+          'entity_id' => $child_id,
+          'revision_id' => $child_id,
+		  'language' => 'und',
+		  'delta' => 0,
+		  'field_parent_organisation_target_id' => $parent_id, 
+		  ))
+        -> execute();
+	}
+
+    $org_node = node_load($parent_id);
+    if (isset($org_node->title)) drupal_set_message(t('Parent organisation changed to ' . $org_node->title), 'status');
+    else drupal_set_message(t('Parent organisation changed to NONE'), 'status');
+    $form_state['storage']['mkb_update2']['nid_valid'] = TRUE;
+  }
+
+  // Rebuild the form
+  $form_state['rebuild'] = TRUE;
+}

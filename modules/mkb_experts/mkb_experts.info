@@ -1,0 +1,7 @@
+name = MKB Evaluation Expert
+description = Evaluation expert application and selection
+core = 7.x
+package = Meta Knowledge Base
+version = 7.x-1.0-beta1
+project = mkb_experts
+stylesheets[all][] = css/mkb_experts.css 

@@ -1,0 +1,733 @@
+<?php
+/**
+ * @file
+ * Code for the mkb_call_admin feature.
+ */
+
+include_once 'mkb_call_admin.features.inc';
+module_load_include('inc', 'mkb_call_admin', 'includes/pages/mkb_call_admin.call_documents');
+
+/////////////////////////////////// MENU & ACCESS & CALLBACK ////////////////////////////////////////
+/*
+ * Implementation of hook_menu()
+ */
+function mkb_call_admin_menu(){
+  $items['funding-details/%'] = array(
+  	'title' => '',
+  	'description' => 'Funding details per funding agency',
+  	'page callback' => 'mkb_call_admin_funding_details_function',
+  	'page arguments' => array(1),
+  	'access callback' => 'mkb_admin_funding_details_access',
+  	'access arguments' => array('access content'),
+  );
+  $items['call_documents/%'] = array(
+    'title' => '',
+    'description' => 'Call documents',
+    'page callback' => 'mkb_call_admin_call_documents_function',
+    'page arguments' => array(1),
+    'access arguments' => array('access content'),
+    'file' => 'includes/pages/mkb_call_admin.call_documents.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+    return $items;
+}
+
+function mkb_admin_funding_details_access(){
+  return TRUE;
+}
+
+function mkb_call_admin_funding_details_function($fid){
+  if(isset($fid)){
+    $variables = array();
+    // Funder page
+    $funder = node_load($fid);
+    $variables['funder'] = $funder;
+    $funder_wrapper = entity_metadata_wrapper('node', $funder);
+
+    $condition_paths = array();
+    foreach ($funder_wrapper->field_attachments->getIterator() as $delta => $field_attachment_wrapper) {
+      $file = $field_attachment_wrapper->value();
+      $link = !empty($file['description']) ? $file['description'] : $file['filename'];
+      $file_uri = $file['uri'];
+      $file_path = file_create_url($file_uri);
+      $variables['condition_files'][] = l($link, $file_path);
+    }
+
+    // Call
+    $call = $funder_wrapper->field_call_id->value();
+    $variables['call'] = $call;
+
+    // Funding agency
+    $agency = $funder_wrapper->field_funding_agency->value();
+    $agency_wrapper = entity_metadata_wrapper('node', $agency);
+    $variables['agency_country'] = $agency_wrapper->field_country->name->value();
+
+
+    // Funding scheme
+    $query = db_select("field_data_field_funder_page", "fp");
+    $query->addField("fp", "entity_id", "scheme_nid");
+    $query->condition("fp.field_funder_page_target_id", $fid, "=");
+    $query->condition("fp.bundle", 'funding_scheme', "=");
+    $result = $query->execute()->fetchAll();
+	$variables['schemes'] = array();
+	if ($result) {
+	  foreach ($result as $row) {
+	    $variables['schemes'][$row -> scheme_nid] = node_load($row -> scheme_nid);
+	  }
+	}
+  }
+  return theme('mkb_call_admin_funding_details_template', $variables);
+}
+
+
+/////////////////////////////////// THEME //////////////////////////////////////////////////
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_call_admin_theme($existing, $type, $theme, $path) {
+  $templates = array (
+      'node__funding_scheme' => array (
+          'variables' => array('content' => NULL),
+          'template' => 'node--funding_scheme' ,
+          'base hook' => 'node',
+          'path' => drupal_get_path('module', 'mkb_call_admin') . '/theme',
+      ),
+      'node__call_funder_page' => array (
+          'variables' => array('content' => NULL),
+          'template' => 'node--call_funder_page' ,
+          'base hook' => 'node',
+          'path' => drupal_get_path('module', 'mkb_call_admin') . '/theme',
+      ),
+      'mkb_call_admin_funding_details_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'funding-details',
+          'path' => drupal_get_path('module', 'mkb_call_admin') . '/theme',
+      ),
+      'call_admin_call_documents_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'call_admin_call_documents',
+          'path' => drupal_get_path('module', 'mkb_call_admin') . '/theme',
+          ),
+  );
+  return $templates;
+}
+
+///////////////////////////////////// PREPROCESS ////////////////////////////////////////////
+
+/**
+ * @param $variables
+ */
+function mkb_call_admin_preprocess_node(&$variables){
+  if($variables['type'] == "funding_scheme"){
+    $call_node = node_load($variables['field_call_id'][0]['target_id']);
+    $variables['field_budget_categories'][] = field_get_items('node', $call_node, 'field_budget_categories');
+  }
+  if($variables['type'] == "call_funder_page"){
+    $call_id = $variables['field_call_id'][0]['target_id'];
+    $variables['topic_labels'][] = mkb_call_admin_get_topics_from_call_id($call_id);
+  }
+}
+
+function mkb_call_admin_preprocess_views_view_table(&$variables){
+  $view = $variables['view'];
+  if($view->name == "call_description_funders"){
+    $call_id = $view->args[0];
+    $theme_funding = mkb_call_admin_get_values($call_id, 'theme_funding');
+    $topic_labels = mkb_call_admin_get_topics_from_call_id($call_id);
+    if ($theme_funding[0] -> value == 1 && count($topic_labels) > 0) {
+      $header_copy = $variables['header'];
+      $header = array_slice($header_copy,0,3);
+      $k=0;
+      foreach($topic_labels as $topic_label){
+        $header[$k] = $topic_label->title;
+        $k++;
+      }
+      $header = $header + array_slice($header_copy,3,count($header_copy)-3);
+      $variables['header'] = $header;
+
+      $i=0;
+      $topic_values = array();
+      foreach($view->result as $row){
+        $fa_id = $row->field_call_id_node_nid;
+        $fa_funding_values = mkb_call_admin_get_values($fa_id, "fp_theme_funding");
+
+        $rows_copy = $variables['rows'][$i];
+        $rows = array_slice($rows_copy,0,3);
+        for ($k=0; $k<count($topic_labels); $k++){
+          $rows[$k] = "";
+        }
+        foreach($fa_funding_values as $funding_value){
+          if ($funding_value->value > 0) $rows[$funding_value->delta] = $funding_value->value;
+        }
+        $rows = $rows + array_slice($rows_copy,3,count($rows_copy)-3);
+        $variables['rows'][$i] = $rows;
+        $i++;
+      }
+    }
+  }
+}
+
+
+///////////////////////////////////// FORM ALTER //////////////////////////////////////////////////////////
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_call_admin_form_alter(&$form, $form_state, $form_id) {
+  // Open mail client button in Coordinator mail
+  if ($form_id == "views_form_call_coordinator_mail_page") {
+    $form = mkb_basic_mail($form, $form_state, $form_id);
+  }
+/////////////////////////////////////////// call_topic_node_form ////////////////////////////////////////
+  if ($form_id == "call_topic_node_form") {
+    //dpm($form);
+	$i=0;
+	$call_topic_index=0;
+	$edit_index=0;
+	$url_comp = explode('/', request_uri());
+
+	foreach($url_comp as $comp) {
+	  if ($comp == 'call-topic') $call_topic_index = $i;
+	  if ($comp == 'edit') $edit_index = $i;
+	  if (strpos($comp,'?')) $url_comp[$i] = substr($comp,0,strpos($comp,'?'));
+	  $i++;
+	}
+
+	// Set destination, with Call id if available from URL
+	// Hide field Call id if set
+	$destination = 'call-topics-setup';
+    if ($edit_index > 0 && isset($url_comp[$edit_index+1])) {
+      $destination = 'call-topics-setup/' . $url_comp[$edit_index+1];
+      $form['field_call_id']['#access'] = false;
+    }
+    if ($call_topic_index > 0 && isset($url_comp[$call_topic_index+1])) {
+      $destination = 'call-topics-setup/' . $url_comp[$call_topic_index+1];
+      $form['field_call_id']['#access'] = false;
+    }
+    $_GET['destination'] = $destination;
+
+    if ($call_topic_index == 0) unset($url_comp); // Default values is set only when "add"
+    if (isset($url_comp[$call_topic_index+1])) { // Call id is in URL
+      $form['field_call_id']['und']['#default_value'] = $url_comp[$call_topic_index+1];
+    }
+    if (isset($url_comp[$call_topic_index+2])) { // Parent id is in URL
+      if ($url_comp[$call_topic_index+2] > 0) $form['field_topic_parent']['und']['#default_value'] = $url_comp[$call_topic_index+2];
+    }
+    if (isset($url_comp[$call_topic_index+3])) { // Level is in URL
+      $form['field_topic_level']['und'][0]['value']['#default_value'] = $url_comp[$call_topic_index+3];
+    }
+    if (isset($url_comp[$call_topic_index+4])) { // Weight id is in URL
+      $form['field_topic_weight']['und'][0]['value']['#default_value'] = $url_comp[$call_topic_index+4];
+    }
+    // These fields have a default from URL or from content type settings
+    $form['field_topic_parent']['#access'] = false;
+    $form['field_topic_level']['#access'] = false;
+    if ($edit_index == 0) $form['field_topic_weight']['#access'] = false;  //hide only when add, not edit
+    if ($edit_index > 0) $form['field_call_id']['#access'] = false;  //hide when edit
+
+  }
+
+//////////////////////////////////////// call_funder_page_node_form //////////////////////////////////
+    if ($form_id == "call_funder_page_node_form") {
+      //Hide title
+      $form['title']['#access'] = FALSE;
+
+      //FUNDING WRAPPER
+      $form['funding'] = array(
+        //'#weight' => '3',
+        '#tree' => FALSE,
+        '#type' => 'fieldset',
+        '#prefix' => '<div id="funding_wrapper-div">',
+        '#suffix' => '</div>',
+        '#collapsible' => FALSE,
+        '#collapsed' => FALSE,
+      );
+
+      //CALL IDENTIFIER - Selectbox
+      $form['funding']["field_call_id"] = $form["field_call_id"];
+      unset( $form["field_call_id"]);
+
+      //CALL IDENTIFIER - Add ajax
+      $form['funding']["field_call_id"]["und"]["#ajax"] = array(
+        'callback' => 'mkb_call_admin_fp_callback',
+        'wrapper' => 'funding_wrapper-div',
+        'method' => 'replace',
+        'effect' => 'fade',
+      );
+
+      //FUNDING AGENCY - MOVE FIELDS TO FUNDING
+      $form['funding']['field_funding_agency'] = $form['field_funding_agency'];
+      unset($form['field_funding_agency']);
+
+      //FUNDING AGENCY - Add ajax
+      $form['funding']["field_funding_agency"]["und"]["#ajax"] = array(
+        'callback' => 'mkb_call_admin_fp_callback',
+        'wrapper' => 'funding_wrapper-div',
+        'method' => 'replace',
+        'effect' => 'fade',
+      );
+
+      //FUNDING - MOVE FIELDS TO FUNDING
+      $form['funding']['field_country_specific'] = $form['field_country_specific'];
+      unset($form['field_country_specific']);
+
+      $form['funding']['field_funding'] = $form['field_funding'];
+      unset($form['field_funding']);
+
+      $form['funding']['field_conditions_short'] = $form['field_conditions_short'];
+      unset($form['field_conditions_short']);
+
+      $form['funding']['field_conditions_full'] = $form['field_conditions_full'];
+      unset($form['field_conditions_full']);
+
+      $form['funding']['field_contact_persons'] = $form['field_contact_persons'];
+      unset($form['field_contact_persons']);
+
+      $form['funding']['field_call_managers'] = $form['field_call_managers'];
+      unset($form['field_call_managers']);
+
+      $form['funding']['field_evaluators'] = $form['field_evaluators'];
+      unset($form['field_evaluators']);
+
+      //CALL_ID - Set Visibility
+      //CALL_ID - Get selected call_id
+      $fp_visible = TRUE;
+      $call_id = 0;
+      $default = FALSE;
+      if(isset($_POST["field_call_id"]["und"])){
+        if($_POST["field_call_id"]["und"] == $form['funding']["field_call_id"]["und"]["#default_value"][0]
+            || (isset($_SESSION["call_id_default"]) && $_SESSION["call_id_default"] == $_POST["field_call_id"]["und"])){
+          //dpm("nothing has changed");
+          $call_id = $_POST["field_call_id"]["und"];
+        }
+        else{
+          //dpm("new funding agency selected");
+          $call_id = $_POST["field_call_id"]["und"];
+        }
+        $_SESSION["call_id_default"] = $_POST["field_call_id"]["und"];
+      }
+      else{
+        if(isset($form['funding']["field_call_id"]["und"]["#default_value"][0])){
+          //dpm("default value");
+          $call_id = $form['funding']["field_call_id"]["und"]["#default_value"][0];
+          $default = TRUE;
+        }
+        else{
+          //dpm("no default values yet");
+          $fp_visible = FALSE;
+        }
+        unset($_SESSION["call_id_default"]);
+      }
+
+      if($fp_visible){
+        $call_node = node_load($call_id);
+        $topics = mkb_call_admin_get_topics_from_call_id($call_id);
+        $theme_funding = $call_node->field_theme_funding['und'][0]['value'];
+        //Theme funding table
+        if(count($topics)>0 && $theme_funding==1){
+          //Theme funding description
+          $tf_desc = $form['field_fp_theme_funding']['und']['#description'];
+
+          //TOPICS_WRAPPER - Fieldset
+          $form['funding']["topics_wrapper"] = array(
+            '#tree' => FALSE,
+            '#weight' => '5',
+            '#type' => 'table',
+            '#collapsible' => TRUE,
+            '#prefix' => '<br/><label>Theme funding</label><div id="topic_table-div"><table class="table_trimmed_no_b"><tbody>',
+            '#suffix' => '</tbody></table>' . $tf_desc . '</div><br/>',
+          );
+
+          $form['funding']["topics_wrapper"]['field_fp_theme_funding'] = $form['field_fp_theme_funding'];
+
+          //TOPICS
+          unset($form['funding']["topics_wrapper"]['field_fp_theme_funding']['und']['#theme']);
+          unset($form['funding']["topics_wrapper"]['field_fp_theme_funding']['und']['#prefix']);
+          unset($form['funding']["topics_wrapper"]['field_fp_theme_funding']['und']['#suffix']);
+          unset($form['funding']["topics_wrapper"]['field_fp_theme_funding']['und']['add_more']);
+          $form['funding']["topics_wrapper"]['field_fp_theme_funding']['und']['#max_delta'] = count($topics)-1;
+          for($i=0; $i<count($topics); $i++){
+            if(isset($form['funding']["topics_wrapper"]['field_fp_theme_funding']['und'][$i]['value']['#default_value'])){
+              $default_value = $form['funding']["topics_wrapper"]['field_fp_theme_funding']['und'][$i]['value']['#default_value'];
+              unset($form['funding']["topics_wrapper"]['field_fp_theme_funding']['und'][$i]);
+            }
+            else{
+              $default_value = 0;
+            }
+
+            $label = $topics[$i]->title;
+            $weight = $topics[$i]->weight;
+
+            $element = array(
+              '#type' => 'textfield',
+              '#delta' => $i,
+              '#default_value' => $default_value,
+              '#prefix' => '<tr><td><b>' . $label . '</b></td><td> 1000 €</td><td>',
+              '#suffix' => '</td></tr>',
+              '#size' => 14,
+              '#maxlength' => 12,
+              '#number_type' => 'integer',
+              '#element_validate' => array('number_field_widget_validate'),
+              '#field_parents' => array(),
+              '#field_name' => 'field_fp_theme_funding',
+              '#language' => 'und',
+              '#weight' => $weight,
+              //'#precision' => 10,
+              //'#access' => $access,
+            );
+            $form['funding']["topics_wrapper"]['field_fp_theme_funding']['und'][$i] = array();
+            $form['funding']["topics_wrapper"]['field_fp_theme_funding']['und'][$i]['value'] = $element;
+          }
+          //Remove the extra field drupal adds to the form
+          if($default){
+            unset($form['funding']["topics_wrapper"]['field_fp_theme_funding']['und'][count($topics)]);
+          }
+        }
+        else{
+          unset($form['funding']["topics_wrapper"]['field_fp_theme_funding']);
+        }
+
+        //Set title to what is selected in funding_agency
+        $fa_id = 0;
+        if(isset($_POST["field_funding_agency"]["und"])){
+          $fa_id = $_POST["field_funding_agency"]["und"];
+        }
+        else{
+          $fa_id = $form['funding']["field_funding_agency"]['und']['#default_value'][0];
+        }
+        $node_funding_agency = node_load($fa_id);
+        $form['title']['#default_value'] = $node_funding_agency->title;
+      }
+
+      unset($form['field_fp_theme_funding']);
+
+      $form['funding']["field_funding_agency"]['und']['#access'] = $fp_visible;
+      $form['funding']["field_country_specific"]['und']['#access'] = $fp_visible;
+      $form['funding']["field_funding"]['und']['#access'] = $fp_visible;
+      $form['funding']["field_conditions_short"]['und']['#access'] = $fp_visible;
+      $form['funding']["field_conditions_full"]['und']['#access'] = $fp_visible;
+      $form['funding']["field_contact_persons"]['und']['#access'] = $fp_visible;
+      $form['funding']["field_call_managers"]['und']['#access'] = $fp_visible;
+      $form['funding']["field_evaluators"]['und']['#access'] = $fp_visible;
+    }
+
+/////////////////////////////////// funding_scheme_node_form /////////////////////////////////////////
+  if ($form_id == "funding_scheme_node_form") {
+/*
+  if (isset($_SESSION["mkb_gid"])) {
+      $gid = $_SESSION["mkb_gid"];
+
+      //Set gid in group audience and remove group audience from form
+      $form['og_group_ref']['und'][0]['default']['#default_value'][0] = $gid;
+      $form['og_group_ref']['#access'] = FALSE;
+*/
+
+      //TITLE - description
+      $form['title']['#description'] = "Enter a title that applicants can use to select the correct funding scheme";
+
+      //FORM - Add js
+      $form['#attached']['js'] = array(
+        drupal_get_path('module', 'mkb_call_admin') . '/js/categories.js');
+
+      //BUDGET_WRAPPER
+      $form['budget'] = array(
+        //'#weight' => '3',
+        '#type' => 'fieldset',
+        '#prefix' => '<div id="budget_wrapper-div">',
+        '#suffix' => '</div>',
+        '#collapsible' => FALSE,
+        '#collapsed' => FALSE,
+      );
+
+      //CALL IDENTIFIER - Selectbox
+      $form['budget']["field_call_id"] = $form["field_call_id"];
+      unset( $form["field_call_id"]);
+
+      //CALL IDENTIFIER - Add ajax
+      $form['budget']["field_call_id"]["und"]["#ajax"] = array(
+        'callback' => 'mkb_call_admin_fs_callback',
+        'wrapper' => 'budget_wrapper-div',
+        'method' => 'replace',
+        'effect' => 'fade',
+      );
+
+      //FUNDER PAGE - Selectbox
+      $form['budget']["field_funder_page"] = $form["field_funder_page"];
+      $form['budget']["field_funder_page"]["und"]["#options"] = array();
+      unset($form["field_funder_page"]);
+
+      //SCHEME CONDITION - Selectbox
+      $form['budget']["field_fun_schc"] = $form["field_fun_schc"];
+      unset( $form["field_fun_schc"]);
+
+
+      //FUNDER PAGE - Setup options
+      $fp_visible = TRUE;
+      $table_visible = TRUE;
+      $budget_categories = array();
+      $budget_cat_descrip = array();
+      if(isset($_POST["field_call_id"]["und"])){
+        if($_POST["field_call_id"]["und"] == $form['budget']["field_call_id"]["und"]['#default_value'][0]){
+          //dpm("FP - nothing has changed");
+          $nid = $form['budget']["field_call_id"]["und"]['#default_value'][0];
+          $form['budget']["field_funder_page"]["und"]["#options"] = mkb_call_admin_get_fa_options($nid);
+          $budget_categories = mkb_call_admin_get_values($nid, 'budget_categories');
+          $budget_cat_descrip = mkb_call_admin_get_values($nid, 'budget_cat_descrip');
+        }
+        elseif($_POST["field_call_id"]["und"] == "_none"){
+          //dpm("FP - has default value but - Select - selected in funding scheme");
+          $table_visible = false;
+          $fp_visible = false;
+        }
+        else{
+          //dpm("FP - new call main page selected");
+          $nid = $_POST["field_call_id"]["und"];
+          $form['budget']["field_funder_page"]["und"]["#options"] = mkb_call_admin_get_fa_options($nid);
+          $budget_categories = mkb_call_admin_get_values($nid, 'budget_categories');
+          $budget_cat_descrip = mkb_call_admin_get_values($nid, 'budget_cat_descrip');
+        }
+      }
+      else{
+        if(isset($form['budget']["field_call_id"]["und"]['#default_value'][0])){
+          //dpm("FP - default value");
+          $nid = $form['budget']["field_call_id"]["und"]['#default_value'][0];
+          $form['budget']["field_funder_page"]["und"]["#options"] = mkb_call_admin_get_fa_options($nid);
+          $budget_categories = mkb_call_admin_get_values($nid, 'budget_categories');
+          $budget_cat_descrip = mkb_call_admin_get_values($nid, 'budget_cat_descrip');
+        }
+        else{
+          //dpm("FP - no default values yet");
+          $form['budget']["field_funder_page"]["und"]["#options"] = array("_none" => "- None -");
+          $fp_visible = FALSE;
+          $table_visible = FALSE;
+        }
+      }
+
+      //FUNDER PAGE - Add ajax
+      $form['budget']["field_funder_page"]["und"]["#ajax"] = array(
+        'callback' => 'mkb_call_admin_fs_callback',
+        'wrapper' => 'budget_wrapper-div',
+        'method' => 'replace',
+        'effect' => 'fade',
+      );
+
+      //FUNDER PAGE - Visibility
+      $form['budget']["field_funder_page"]['und']['#access'] = TRUE;
+      $form['budget']["field_fun_schc"]['und']['#access'] = TRUE;
+      if(!$fp_visible){
+        $form['budget']["field_funder_page"]['und']['#access'] = FALSE;
+        $form['budget']["field_fun_schc"]['und']['#access'] = FALSE;
+      }
+
+      //TABLE - Visibility
+      if(isset($_POST["field_funder_page"]["und"]) && $_POST["field_funder_page"]["und"] != "_none"){
+        if($_POST["field_funder_page"]["und"] == $form['budget']["field_funder_page"]["und"]["#default_value"][0]){
+          //dpm("TABLE - nothing has changed");
+        }
+        else{
+          //dpm("TABLE - new funder page selected");
+        }
+      }
+      elseif(!isset($_POST["field_funder_page"]["und"])){
+        if(isset($form['budget']["field_funder_page"]["und"]["#default_value"][0])){
+          //dpm("TABLE - default value");
+        }
+        else{
+          //dpm("TABLE - no default values yet");
+          $table_visible = false;
+        }
+      }
+      elseif($_POST["field_funder_page"]["und"] == "_none"){
+        //dpm("TABLE - has default value but - Select - selected in funder page");
+        $table_visible = false;
+      }
+
+      //TABLE - Headers
+      $table_header = "";
+      if($table_visible){
+        $table_header .= '<tr><th>Project activities</th>';
+        foreach($budget_categories as $row) {
+            $table_header .= '<th>' . $row->value . '</th>';
+          }
+        $table_header .= '</tr>';
+        if($budget_cat_descrip){
+          $table_header .= '<tr><td>Description</td>';
+          foreach($budget_cat_descrip as $row) {
+              $table_header .= '<td>' . wordwrap($row->value,40,'<br>') . '</td>';
+            }
+          $table_header .= '</tr>';
+        }
+      }
+
+      //TABLE - Footer
+      $table_footer = "";
+      if($table_visible){
+        $table_footer .= "Check the budgets items that can be funded by this scheme. Enter max funding in percent.";
+      }
+
+      //TABLE_WRAPPER - Fieldset
+      $form['budget']["table_wrapper"] = array(
+        '#tree' => FALSE,
+        '#weight' => '10',
+        '#type' => 'table',
+        '#collapsible' => TRUE,
+        '#prefix' => '<br/><div id="budget_table-div"><table><tbody>' . $table_header,
+        '#suffix' => '</tbody></table>' . $table_footer . '</div><br/>',
+      );
+
+      //TABLE - Build table
+      $form['budget']['table_wrapper']['table'] = array();
+      if($table_visible){
+        $budget_names = array("categories", "pm", "pc", "ts", "cs", "eq", "sc", "oc", "ic", "rm");
+        for($i=0; $i<count($budget_names); $i++){
+          $row_name = "field_fun_" . $budget_names[$i];
+          $class_name = "field-fun-" . $budget_names[$i];
+          $form['budget']['table_wrapper']['table'][$row_name] = $form[$row_name];
+          $label = $form['budget']['table_wrapper']['table'][$row_name]['und']['#title'];
+          $form['budget']['table_wrapper']['table'][$row_name]['und']['#cardinality'] = count($budget_categories);
+          $form['budget']['table_wrapper']['table'][$row_name]['und']['#max_delta'] = $i;
+          unset($form['budget']['table_wrapper']['table'][$row_name]['und']['#attributes']['class']);
+          unset($form['budget']['table_wrapper']['table'][$row_name]['und']['#theme']);
+          for($j=0; $j<count($budget_categories); $j++){
+            $form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['value']['#prefix'] = "<td>";
+            $form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['value']['#suffix'] = "</td>";
+
+            if ($j == 0) $form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['value']['#prefix'] = '<tr><td>' . $label . '</td><td>';
+            if ($j == count($budget_categories)-1) $form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['value']['#suffix'] = '</td></tr>';
+
+            if($row_name == "field_fun_rm"){
+              //Remove weight from MAX FUNDED
+              unset($form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['_weight']);
+            }
+            elseif($row_name == "field_fun_categories"){
+              //CATEGORIES - Add js
+              $form['budget']['table_wrapper']['table']['field_fun_categories']['und'][$j]['value']['#attributes'] = array(
+                  'onchange' => "toggleSelectAll(this);");
+              $form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['value']['#type'] = "checkbox";
+              $form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['value']['#return_value'] = $j+1;
+              unset($form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['_weight']);
+            }
+            else{
+              //Change type to checkbox
+              $form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['value']['#type'] = "checkbox";
+              $form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['value']['#return_value'] = $j+1;
+              unset($form['budget']['table_wrapper']['table'][$row_name]['und'][$j]['_weight']);
+            }
+          }
+          //Remove row delta that is not used
+          if(count($budget_categories) == 0){
+            unset($form['budget']['table_wrapper']['table'][$row_name]['und'][0]);
+            unset($form['budget']['table_wrapper']['table'][$row_name]['und'][1]);
+            unset($form['budget']['table_wrapper']['table'][$row_name]['und'][2]);
+          }
+          if(count($budget_categories) == 1){
+            unset($form['budget']['table_wrapper']['table'][$row_name]['und'][1]);
+            unset($form['budget']['table_wrapper']['table'][$row_name]['und'][2]);
+          }
+          if(count($budget_categories) == 2){
+            unset($form['budget']['table_wrapper']['table'][$row_name]['und'][2]);
+          }
+        }
+      }
+
+      if(!$fp_visible){
+        $form['budget']['table_wrapper']['#collapsed'] = TRUE;
+        $form['budget']['table_wrapper']['#states'] = array('visible' => FALSE);
+      }
+      else{
+        $form['budget']['table_wrapper']['#collapsed'] = FALSE;
+        $form['budget']['table_wrapper']['#states'] = array('visible' => TRUE);
+      }
+
+      //Remove budget table fields from form
+      unset($form["field_fun_categories"]);
+      unset($form["field_fun_pm"]);
+      unset($form["field_fun_pc"]);
+      unset($form["field_fun_ts"]);
+      unset($form["field_fun_cs"]);
+      unset($form["field_fun_eq"]);
+      unset($form["field_fun_sc"]);
+      unset($form["field_fun_oc"]);
+      unset($form["field_fun_ic"]);
+      unset($form["field_fun_rm"]);
+    }
+}
+
+///////////////////////////////////// CALL BACK FUNCTIONS ///////////////////////////////////////
+
+function mkb_call_admin_fp_callback($form, $form_state) {
+  return render($form['funding']);
+}
+
+function mkb_call_admin_fs_callback($form, $form_state) {
+  return render($form['budget']);
+}
+
+///////////////////////////////////// HELPER FUNCTIONS //////////////////////////////////////////
+
+/**
+  * Param Call-main-page nid
+  * Return funding agency options
+ */
+function mkb_call_admin_get_fa_options($nid){
+  $query = db_select("node", "n");
+  $query->leftJoin("field_data_field_call_id", "ci", "ci.entity_id = n.nid");
+  $query->leftJoin("field_data_field_funder_page", "fp", "fp.entity_id = n.nid");
+  $query
+  ->fields("n", array("title", "nid"))
+  ->condition("ci.field_call_id_target_id", $nid)
+  ->condition("n.type", "call_funder_page");
+  $result = $query->execute()->fetchAll();
+  $options = array("_none" => "- Select -");
+  foreach($result as $row){
+    $options[$row->nid] = $row->title;
+  }
+  return $options;
+}
+
+/**
+ * Returns values aliased as "delta" and "value" from a multiple value field
+ */
+function mkb_call_admin_get_values($nid, $field_name) {
+  $query = db_select("field_data_field_" . $field_name, "x");
+  $query->addField("x", "delta", "delta");
+  $query->addField("x", "field_" . $field_name . "_value", "value");
+  $query->condition("x.entity_id", $nid, "=");
+  $result = $query->execute()->fetchAll();
+  return $result;
+}
+
+function mkb_call_admin_get_topics_from_call_id($nid){
+  $query = db_select("field_data_field_call_id", "ci");
+  $query->leftJoin("node", "n", "ci.entity_id = n.nid");
+  $query->leftJoin("field_data_field_topic_level", "tl", "n.nid = tl.entity_id");
+  $query->leftJoin("field_data_field_topic_weight", "tw", "tl.entity_id = tw.entity_id");
+  $query->addField("n", "title", "title");
+  $query->addField("tw", "field_topic_weight_value", "weight");
+  $query->condition("ci.field_call_id_target_id", $nid, "=");
+  $query->condition("ci.bundle", "call_topic", "=");
+  $query->condition("tl.field_topic_level_value", 1, "=");
+  $query->orderBy('weight');
+  $result = $query->execute()->fetchAll();
+  return $result;
+}
+
+/**
+ * @param $nid
+  *   Call-funder-page node id.
+ * @return $country
+ *   Funding agency country.
+ */
+function mkb_call_admin_get_funder_page_country($nid){
+  $query = db_select("field_data_field_funding_agency", "field_funding_agency");
+  $query->leftJoin("field_data_field_country", "field_country", "field_country.entity_id = field_funding_agency.field_funding_agency_target_id");
+  $query->leftJoin("countries_country", "countries_country", "countries_country.iso2 = field_country.field_country_iso2");
+  $query->addField("countries_country", "name", "country");
+  $query->condition("field_funding_agency.entity_id", $nid);
+  $query->condition("field_funding_agency.bundle", 'call_funder_page');
+  $query->condition("field_country.bundle", 'organisation');
+  $query->distinct();
+  $result = $query->execute()->fetchField();
+  return $result;
+}

@@ -1,0 +1,137 @@
+<?php
+
+/**
+ * @file
+ * Update organisations
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function mkb_update_menu() {
+  $items = array();
+      $items['update_my_org/%'] = array(
+      'title' => '',
+      'description' => t('Update my organisation'),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mkb_update_form'),
+      'access arguments' => array('access content'),
+      'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Page callback function.
+ */
+function mkb_update_page(&$form_state){
+  $form = drupal_get_form('mkb_update_form');
+  return $form;
+}
+
+function mkb_update_form($form, &$form_state) {
+  $uid = arg(1);
+  $user = user_load($uid);
+  $profile = profile2_load_by_user($uid);
+  $nid_valid = FALSE;
+  if(isset($form_state['storage']['mkb_update']['nid_valid'])) $nid_valid = TRUE;
+  if(isset($form_state['storage']['mkb_update']) && $nid_valid){
+    $org_id = $form_state['storage']['mkb_update']['my_org_id'];
+  }
+  else{
+    $org_id = $profile['main']->field_my_organisation['und'][0]['target_id'];
+  }
+  $org_node = node_load($org_id);
+
+  $form = array();
+  $form['wrapper'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Update user organisation'),
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+  );
+  $form['wrapper']['uid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Uid'),
+    '#required' => TRUE,
+    '#default_value' => $uid,
+    '#size' => 20,
+    '#maxlength' => 20,
+    '#access' => 0,
+  );
+  $form['wrapper']['name'] = array(
+    '#markup' => '<p>User:</br><strong>' . $user->realname . '</strong></p>'
+  );
+
+  $form['wrapper']['my_org_name'] = array();
+  $my_org_name = $org_node -> field_org_name['und'][0]['value'];
+  if(isset($my_org_name)){
+    $form['wrapper']['my_org_name']['#markup'] = '<p>Organisation:</br>' . $my_org_name . '</p>';
+  }
+  else{
+        $form['wrapper']['my_org_name']['#markup'] = '<p>Organisation Name:</br>None</p>';
+  }
+
+  $form['wrapper']['my_org_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Input new ID to update'),
+    '#required' => TRUE,
+    '#default_value' => $org_id,
+    '#size' => 20,
+    '#maxlength' => 20,
+  );
+
+  $form['wrapper']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Submit',
+    '#submit' => array('mkb_update_form_submit'),
+  );
+
+  $form['wrapper']['back'] = array();
+  if(isset($_SESSION['org_tree_nid'])){
+    $form['wrapper']['back']['#markup'] = '<p>' . l('Back to organisation tree', 'node/12442/' . $_SESSION['org_tree_nid']) . '</p>';
+  }
+
+  return $form;
+}
+
+function mkb_up_submit($form, &$form_state) {
+}
+
+function mkb_update_form_submit($form, &$form_state) {
+  // Store values
+  $form_state['storage']['mkb_update'] = $form_state['values'];
+
+  $uid = $form_state['values']['uid'];
+  $org_id = $form_state['values']['my_org_id'];
+  $profile = profile2_load_by_user($uid);
+  $pid = $profile['main'] -> pid;
+  $nid = 0;
+  $query_nid = db_select("node", "n");
+  $query_nid
+  ->fields("n", array("nid"))
+  ->condition("n.nid", $org_id)
+  ->condition("n.type", "organisation");
+  $result = $query_nid->execute();
+  $nid = $result->fetchField();
+
+  if($nid == 0){
+    drupal_set_message(t('Organisation ID does not exist'), 'error');
+    $form_state['storage']['mkb_update']['nid_valid'] = FALSE;
+  }
+  else{
+    $query = db_update('field_data_field_my_organisation')
+    ->fields(array(
+      'field_my_organisation_target_id' => $org_id,
+    ))
+    ->condition('entity_id', $pid, '=')
+    ->execute();
+
+    $org_node = node_load($org_id);
+    drupal_set_message(t('User organisation changed to ' . $org_node->title), 'status');
+    $form_state['storage']['mkb_update']['nid_valid'] = TRUE;
+  }
+
+  // Rebuild the form
+  $form_state['rebuild'] = TRUE;
+}

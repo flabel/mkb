@@ -1,0 +1,230 @@
+<?php
+/*
+ * Implementation of hook_menu()
+ */
+function mkb_partner_consult_menu(){
+    $items['partner/consultation/%'] = array(
+      'title' => '',
+      'description' => 'Partner consultation',
+      'page callback' => 'mkb_partner_consult_function',
+      'page arguments' => array(2),
+      'access callback' => 'mkb_partner_consult_access',
+      'access arguments' => array(2),
+    );
+    return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_partner_consult_theme($existing, $type, $theme, $path) {
+  $templates = array (
+      'mkb_partner_consult_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'partner_consult',
+          'path' => drupal_get_path('module', 'mkb_partner_consult') . '/theme',
+      ),
+      );
+  return $templates;
+}
+
+/**
+ * Determines access for ict_page pages.
+ *
+ * @param $cid
+ *   Consultation number
+ * @return $access
+ *   TRUE : 1. Current user has 'Administrator' role.
+  */
+function mkb_partner_consult_access($cid){
+  global $user;
+  if (in_array('administrator', $user->roles)) return TRUE;
+  if (in_array('project member', $user->roles)) return TRUE;
+  return FALSE;
+//  return TRUE;
+}
+
+/**
+ * Generates content for first_page template.
+ *
+ * @param $cid
+ *   Consultation number
+ * @return template
+ *   The rendered template mkb_providers_overview_template.
+ */
+function mkb_partner_consult_function($cid){
+  if(isset($cid)){
+// Find the node id of the inquiry
+    $inquiry_nid = mkb_partner_consult_get_inquiry_nid($cid);
+    $inquiry = array();
+    $inquiry['inquiry'] = node_load($inquiry_nid);
+    $participant_nid = $inquiry['inquiry'] -> field_consult_participant['und'][0]['target_id'];
+    $inquiry['partner_acronym'] = node_load($participant_nid) -> title;
+    $edit_access = mkb_partner_consult_edit_access($participant_nid);
+    $inquiry['edit_access'] = $edit_access; 
+// Find the node id of the project node with references to the project_participants nodes 
+    $project_nid = $inquiry['inquiry'] -> field_project['und'][0]['target_id'];
+  }
+  
+// Extract data about project participants and their possible responses
+  if(isset($cid) && isset($project_nid)){
+
+    // Find all partners in this project
+    $query = db_select('field_data_field_participant_number', 'pn');
+    $query -> leftJoin('field_data_field_project', 'p', 'p.entity_id = pn.entity_id');
+    $query -> leftJoin('node', 'n', 'n.nid = pn.entity_id');
+    $query  
+      -> fields('pn', array('field_participant_number_value')) // Participant number 
+      -> fields('n', array('title','nid')) // This is the acronym and nid of the participant
+      -> condition('p.field_project_target_id', $project_nid)
+      -> condition('p.bundle', 'project_participants')
+      -> orderBy('pn.field_participant_number_value')
+	  ;
+    $result = $query->execute()->fetchAll();
+    $responses = array();
+	if ($result) {
+	  // For each partner ..
+ 	  foreach ($result as $row) {
+	    // Store data in response
+ 	    $response = array(
+		  'partner_number' => $row -> field_participant_number_value,
+		  'partner_acronym' => $row -> title,
+		  'participant_nid' => $row -> nid,
+		  'consult_number' => $cid,
+		  'consult_type' => 0,
+		  'project_nid' => $project_nid,
+		);
+		// Get partner's response
+		$participant_nid = $row -> nid;
+        $query = db_select('field_data_field_consult_number', 'cn');
+        $query -> leftJoin('field_data_field_consult_participant', 'cp', 'cp.entity_id = cn.entity_id');
+        $query -> leftJoin('field_data_field_consult_type', 'ct', 'ct.entity_id = cn.entity_id');
+		$query 
+		  -> fields('cp', array('field_consult_participant_target_id','entity_id'))
+		  -> fields('cn', array('field_consult_number_value'))
+		  -> condition('cp.field_consult_participant_target_id', $participant_nid)
+          -> condition('cn.field_consult_number_value', $cid)
+          -> condition('ct.field_consult_type_value', 0);
+        $result2 = $query->execute()->fetchAll();
+		$edit_access = mkb_partner_consult_edit_access($participant_nid);
+		$response['edit_access'] = $edit_access; 
+		$response['response_nid'] = false;
+		if ($result2) {
+          $response_nid = $result2[0] -> entity_id; 		
+		  $response['response_nid'] = $response_nid;
+		  $response['response'] = node_load($response_nid); 
+		}
+	    array_push($responses, $response);
+	  }
+	}
+  }
+// Return the data to partner_consult.tpl for display
+  return theme('mkb_partner_consult_template', array('inquiry' => $inquiry, 'responses' => $responses));
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_partner_consult_form_alter(&$form, $form_state, $form_id) {
+  if ($form_id == "consult_node_form") {
+    $i=0;
+	$call_topic_index=0;
+	$edit_index=0;
+	$url_comp = explode('/', request_uri());
+// Alter form for responses. File upload gives a new url and in that case the original url is used
+    if ((isset($url_comp[4]) && $url_comp[4] == 'response') || ($url_comp[2] == 'ajax' && $url_comp[3] == 'field_files')) {
+      if ($url_comp[2] == 'ajax' && $url_comp[3] == 'field_files') $url_comp = $_SESSION['url_comp'];
+      else $_SESSION['url_comp'] = $url_comp;
+      $form['title']['#default_value'] = 'Response';
+	  $form['body']['und'][0]['value']['#title'] = 'Response';
+	  $form['field_consult_type']['und']['#default_value'] = 0;
+	  $form['field_consult_number']['und'][0]['value']['#default_value'] = $url_comp[6];
+	  $form['field_consult_participant']['und']['#default_value'] = $url_comp[5];
+	  $form['field_project']['und']['#default_value'] = $url_comp[7];
+	  $form['title']['#access'] = false;
+	  // $form['field_consult_type']['#access'] = false;
+	  $form['field_consult_number']['#access'] = false;
+	  $form['field_consult_participant']['#access'] = false;
+	  $form['field_project']['#access'] = false;
+	  $form['field_delivery_date']['#access'] = false;
+	  $form['field_consult_open']['#access'] = false;
+	  $form['field_closed']['#access'] = false;
+	  $form['field_consult_type']['#access'] = false;
+	  $form['field_cost_period']['#access'] = false;
+	  $form['field_cost_total']['#access'] = false;
+// Cost report extra
+	  $cid = $url_comp[6];
+      $inquiry_nid = mkb_partner_consult_get_inquiry_nid($cid);
+      $inquiry = node_load($inquiry_nid);
+	  if (!empty($inquiry -> field_cost_period)) {
+        $cost_period_start = $inquiry -> field_cost_period['und'][0]['value'];      
+        $cost_period_end = $inquiry -> field_cost_period['und'][0]['value2'];     
+        $form['#groups']['group_cost_report'] -> label .= ' ' . substr($cost_period_start,0,10) . ' - ' . substr($cost_period_end,0,10);
+	  }
+	  else {
+	    $form['field_cost_personnel']['#access'] = false;
+	    $form['field_cost_travel']['#access'] = false;
+	    $form['field_cost_other']['#access'] = false;
+	    $form['field_cost_subcontract']['#access'] = false;
+	    $form['field_cost_indirect']['#access'] = false;
+	  }
+    }
+  }
+}
+
+/**
+ * Tiny number added to make sure total is saved
+ *
+ * Implementation of hook_node_presave()
+ */
+function mkb_partner_consult_node_presave($node){
+  if ($node->type=='consult') {
+    $total = 0;
+	if (!empty($node -> field_cost_personnel['und'])) $total += $node -> field_cost_personnel['und'][0]['value'] + 0.0001;
+	if (!empty($node -> field_cost_travel['und'])) $total += $node -> field_cost_travel['und'][0]['value'] + 0.0001;
+	if (!empty($node -> field_cost_other['und'])) $total += $node -> field_cost_other['und'][0]['value'] + 0.0001;
+	if (!empty($node -> field_cost_subcontract['und'])) $total += $node -> field_cost_subcontract['und'][0]['value'] + 0.0001;
+	if (!empty($node -> field_cost_indirect['und'])) $total += $node -> field_cost_indirect['und'][0]['value'] + 0.0001;
+	if ($total > 0) $node -> field_cost_total['und'][0]['value'] = $total;
+  }
+}
+
+function mkb_partner_consult_get_inquiry_nid($cid) {
+  $query = db_select('node', 'n');
+  $query -> leftJoin('field_data_field_consult_number', 'x', 'x.entity_id = n.nid');
+  $query -> leftJoin('field_data_field_consult_type', 't', 't.entity_id = n.nid');
+  $query  
+    -> fields('n', array('nid'))
+    -> condition('n.type', 'consult')
+    -> condition('x.field_consult_number_value', $cid)
+    -> condition('t.field_consult_type_value', '1')
+  ;
+  $result = $query->execute()->fetchAll();
+  if ($result) {
+	foreach ($result as $row) {
+	  $inquiry_nid = $row -> nid;
+	}
+    return $inquiry_nid;
+  }
+  else return false;
+}
+
+function mkb_partner_consult_edit_access($nid) {
+  $this_user = $GLOBALS['user'] -> uid;
+  $this_node = node_load($nid);
+  if (!empty($this_node -> field_participant_people)) $participant_users = $this_node -> field_participant_people['und'];
+  else $participant_users = array();
+  if (!empty($this_node -> field_participant_contact)) $participant_contacts = $this_node -> field_participant_contact['und'];
+  else $participant_contacts = array();
+//  $participant_users = node_load($nid) -> field_participant_people['und']; 
+//  $participant_contacts = node_load($nid) -> field_participant_contact['und']; 
+  $edit_access = false;
+  foreach ($participant_users as $index => $value) {
+    if ($value['target_id'] == $this_user) $edit_access = true;
+  }
+  foreach ($participant_contacts as $index => $value) {
+    if ($value['target_id'] == $this_user) $edit_access = true;
+  }
+ if(in_array('administrator',$GLOBALS['user'] -> roles)) $edit_access = true;
+  return $edit_access;
+}

@@ -1,0 +1,281 @@
+<?php
+/**
+ * @file
+ * Code for the mkb_groups module.
+ */
+
+include_once 'mkb_groups.features.inc';
+module_load_include('inc', 'mkb_groups', 'includes/blocks/mkb_groups.blocks');
+module_load_include('inc', 'mkb_groups', 'includes/pages/mkb_groups.public_groups');
+module_load_include('inc', 'mkb_groups', 'includes/pages/mkb_groups.my_groups');
+module_load_include('inc', 'mkb_groups', 'includes/pages/mkb_groups.all_groups');
+module_load_include('inc', 'mkb_groups', 'includes/forms/mkb_groups.manage_members');
+module_load_include('inc', 'mkb_groups', 'includes/mkb_groups.helper');
+
+/**
+ * Implements hook_menu()
+ */
+function mkb_groups_menu(){
+    $items['groups/workspace/manage_members/%'] = array(
+      'description' => 'Manage group members',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mkb_groups_manage_members_form',3),
+      'access arguments' => array(3),
+      'access callback' => 'mkb_groups_members_access',
+      'file' => 'includes/forms/mkb_groups.manage_members.inc',
+      'type' => MENU_NORMAL_ITEM,
+    );
+    $items['groups/my_groups'] = array(
+      'title' => '',
+      'description' => 'My groups',
+      'page callback' => 'mkb_groups_my_groups_function',
+      'access arguments' => array('access content'),
+      'file' => 'includes/pages/mkb_groups.my_groups.inc',
+      'type' => MENU_NORMAL_ITEM,
+	  'menu_name' => 'menu-proposals',
+    );
+    $items['groups/public_groups'] = array(
+      'title' => '',
+      'description' => 'Public groups',
+      'page callback' => 'mkb_groups_public_groups_function',
+      'access arguments' => array('access content'),
+      'file' => 'includes/pages/mkb_groups.public_groups.inc',
+      'type' => MENU_NORMAL_ITEM,
+	  'menu_name' => 'menu-proposals',
+    );
+    $items['groups/all_groups/%'] = array(
+      'title' => 'All groups',
+      'description' => 'All groups',
+      'page callback' => 'mkb_groups_all_groups_function',
+      'page arguments' => array(2),
+      'access arguments' => array(2),
+      'access callback' => 'mkb_groups_all_groups_access',
+      'file' => 'includes/pages/mkb_groups.all_groups.inc',
+      // 'type' => MENU_NORMAL_ITEM,
+	  // 'menu_name' => 'menu-call-admin',
+    );
+    return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_groups_theme($existing, $type, $theme, $path) {
+  $templates = array(
+      'my_groups_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'my_groups',
+          'path' => drupal_get_path('module', 'mkb_groups') . '/theme',
+      ),
+      'public_groups_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'public_groups',
+          'path' => drupal_get_path('module', 'mkb_groups') . '/theme',
+      ),
+      'all_groups_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'all_groups',
+          'path' => drupal_get_path('module', 'mkb_groups') . '/theme',
+      ),
+  );
+  return $templates;
+}
+
+/**
+ * Implements hook_block_info()
+ */
+function mkb_groups_block_info() {
+  $blocks['groups'] = array(
+    'info' => 'Groups',
+	'status' => TRUE,
+    'region' => 'sidebar_first',
+    'weight' => -20,
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view()
+ */
+function mkb_groups_block_view($delta = '') {
+  $block = array();
+  if ($delta == 'groups') {
+    if (mkb_groups_block_visibility($delta)) {
+      $block = array(
+        'subject' => 'Group',
+	    'content' => mkb_groups_block_content(),
+      );
+	}
+  }
+  return $block;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_groups_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == "group_docs_node_form") {
+    if (isset($_SESSION["mkb_gid"])) {
+      $gid = $_SESSION["mkb_gid"];
+
+      //Set gid in group audience and remove group audience from form
+      $form['og_group_ref']['und'][0]['default']['#default_value'][0] = $gid;
+      $form['og_group_ref']['#access'] = FALSE;
+    }
+  }
+  if ($form_id == "views_form_groups_ws_members_panel_pane_1") {
+    $form = mkb_basic_mail($form, $form_state, $form_id);
+  }
+}
+
+/**
+ * @param $gid
+ *   Group node id.
+ * @return $access
+ *   TRUE if user is member og group.
+ */
+function mkb_groups_members_access($gid){
+  global $user;
+  if(og_is_member('node', $gid, $entity_type = 'user', $entity = NULL, $states = array(OG_STATE_ACTIVE))) return TRUE;
+  if(in_array('administrator',$user -> roles)) return TRUE;
+  if(in_array('call administrator',$user -> roles)) return TRUE;
+  if (user_access('administer group')) return TRUE;
+  return FALSE;
+}
+function mkb_groups_all_groups_access($gid){
+  global $user;
+  if(in_array('administrator',$user -> roles)) return TRUE;
+  if(in_array('SAF member',$user -> roles)) return TRUE;
+  return FALSE;
+}
+
+/**
+ * Implements hook_file_download()
+ */
+function mkb_groups_file_download($uri) {
+  if(strpos($uri, "/group/")){
+    mkb_groups_file_group($uri);
+  }
+  if(strpos($uri, "/dow/")){
+    mkb_groups_file_dow($uri);
+  }
+}
+
+/**
+ * @param $uri
+ *   URI.
+ * @return $headers
+ *   Headers if group has group attachments.
+ */
+function mkb_groups_file_group($uri){
+  $uid = $GLOBALS['user']->uid;
+  $query = db_select("file_managed", "file_managed");
+  $query->leftJoin("field_data_field_group_attachment", "ga", "ga.field_group_attachment_fid = file_managed.fid");
+  $query->leftJoin("og_membership", "og_membership", "og_membership.etid = ga.entity_id");
+  $query->addField("file_managed", "fid", "fid");
+  $query->addField("og_membership", "gid", "gid");
+  $query
+  ->condition("file_managed.uri", $uri)
+  ->condition("og_membership.entity_type", "node");
+  $result = $query->execute()->fetchAll();
+
+  $gid = 0;
+  $fid = 0;
+  foreach($result as $row){
+    $gid = $row->gid;
+    $fid = $row->fid;
+  }
+
+  $query = db_select("og_membership", "og_membership");
+  $query->addField("og_membership", "etid", "etid");
+  $query
+  ->condition("og_membership.gid", $gid)
+  ->condition("og_membership.entity_type", "user")
+  ->condition("og_membership.etid", $uid);
+  $result_2 = $query->execute()->fetchField();
+
+  if($result_2){
+    $file = file_load($fid);
+    $headers = file_get_content_headers($file);
+    return $headers;
+  }
+  else{
+    return -1;
+  }
+}
+
+/**
+ * @param $uri
+ *   URI.
+ * @return $headers
+ *   Headers if group has DOW.
+ */
+function mkb_groups_file_dow($uri){
+  global $user;
+
+  // Get file and group
+    $query = db_select("file_managed", "file_managed");
+    $query->leftJoin("field_data_field_app_dow", "app_dow", "app_dow.field_app_dow_fid = file_managed.fid");
+    $query->leftJoin("og_membership", "og_membership", "og_membership.etid = app_dow.entity_id");
+    $query->addField("file_managed", "fid", "fid");
+    $query->addField("og_membership", "gid", "gid");
+    $query
+    ->condition("file_managed.uri", $uri)
+    ->condition("og_membership.entity_type", "node");
+    $result = $query->execute()->fetchAll();
+
+    $gid = 0;
+    $fid = 0;
+    foreach($result as $row){
+      $gid = $row->gid;
+      $fid = $row->fid;
+    }
+  $file = file_load($fid);
+  $headers = file_get_content_headers($file);
+
+
+  // Check if user is a member of the group
+    $query = db_select("og_membership", "og_membership");
+    $query->addField("og_membership", "etid", "uid");
+    $query
+    ->condition("og_membership.gid", $gid)
+    ->condition("og_membership.entity_type", "user")
+    ->condition("og_membership.etid", $user->uid);
+    $result = $query->execute()->fetchField();
+  if($result !== FALSE) return $headers;
+
+  // Check if user is administrator or call administrator
+  if (in_array('administrator', $user->roles) || in_array('call administrator', $user->roles)) return $headers;
+
+  // Check if user is SAF member
+  if (in_array('SAF member', $user->roles)) return $headers;
+
+  // Get the call this group belongs to.
+  $cid = mkb_application_get_call_main_nid($gid);
+
+  // Check if user is call manager or evaluator in any of the funder_pages in the call
+  $query = db_select("field_data_field_call_id", "field_call_id");
+  $query ->leftJoin("field_data_field_call_managers", "field_call_managers", "field_call_managers.entity_id = field_call_id.entity_id");
+  $query ->addField("field_call_managers", "entity_id", "nid");
+  $query
+  ->condition("field_call_id.bundle", 'call_funder_page')
+  ->condition("field_call_id.field_call_id_target_id", $cid)
+  ->condition("field_call_id.entity_type", 'node')
+  ->condition("field_call_managers.field_call_managers_target_id", $user->uid);
+  $result = $query->execute()->fetchAll();
+  if($result !== FALSE) return $headers;
+
+  $query = db_select("field_data_field_call_id", "field_call_id");
+  $query ->leftJoin("field_data_field_evaluators", "field_evaluators", "field_evaluators.entity_id = field_call_id.entity_id");
+  $query ->addField("field_evaluators", "entity_id", "nid");
+  $query
+  ->condition("field_call_id.bundle", 'call_funder_page')
+  ->condition("field_call_id.field_call_id_target_id", $cid)
+  ->condition("field_call_id.entity_type", 'node')
+  ->condition("field_evaluators.field_evaluators_target_id", $user->uid);
+  $result = $query->execute()->fetchAll();
+  if($result !== FALSE) return $headers;
+
+  // User does not have permissions to download this file
+  return -1;
+}

@@ -1,0 +1,103 @@
+.td_align_right{
+	text-align: right;
+	valign: top;
+}
+
+.td_align_center{
+    text-align: center;
+}
+
+.application_ws_home{
+    width: 100%;
+}
+
+.application_ws_home p{
+    margin: 0px;
+    padding: 0.2em 0.5em 0px 0px;    
+}
+
+.application_ws_home_body{
+    border-top: 1px solid #494949;    
+    border-bottom: 1px solid #494949;
+    width: 100%;
+}
+
+.budget_table_0_1{
+	vertical-align: bottom;
+	text-align: left;
+}
+
+.budget_table_0{
+	text-align: center;
+	border-bottom: 1px solid #000;
+}
+/* Tables */
+#hor-zebra table
+{
+    font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
+    font-size: 12px;
+    margin-top: 10px 0px 10px 0px;;
+    width: 100%;
+    text-align: left;
+    border-collapse: collapse;
+}
+
+#hor-zebra th
+{
+    font-size: 14px;
+    font-weight: normal;
+    padding: 6px 4px;
+}
+#hor-zebra td
+{
+    padding: 4px;
+}
+#hor-zebra .odd
+{
+    background: #F5F5F5; 
+}
+
+
+#ver-zebra
+{
+    font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
+    font-size: 12px;
+    margin: 45px;
+    width: 480px;
+    text-align: left;
+    border-collapse: collapse;
+}
+#ver-zebra th
+{
+    font-size: 14px;
+    font-weight: normal;
+    padding: 12px 15px;
+    border-right: 1px solid #fff;
+    border-left: 1px solid #fff;
+    color: #039;
+}
+#ver-zebra td
+{
+    padding: 8px 15px;
+    border-right: 1px solid #fff;
+    border-left: 1px solid #fff;
+    color: #669;
+}
+.vzebra-odd
+{
+    background: #eff2ff;
+}
+.vzebra-even
+{
+    background: #e8edff;
+}
+#ver-zebra #vzebra-adventure, #ver-zebra #vzebra-children
+{
+    background: #d0dafd;
+    border-bottom: 1px solid #c8d4fd;
+}
+#ver-zebra #vzebra-comedy, #ver-zebra #vzebra-action
+{
+    background: #dce4ff;
+    border-bottom: 1px solid #d6dfff;
+}

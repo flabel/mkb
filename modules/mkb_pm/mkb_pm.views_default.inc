@@ -1,0 +1,1 @@
+<?php/** * @file * mkb_pm.views_default.inc */ /** * Implements hook_views_default_views(). */function mkb_pm_views_views_default_views() {  $views = array();  return $views;}

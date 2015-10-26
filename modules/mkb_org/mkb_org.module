@@ -1,0 +1,254 @@
+<?php
+
+module_load_include('inc', 'mkb_org', 'mkb_org');
+
+/**
+ * @file
+ * Demonstrate module mkb organisation.
+ */
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_org_form_alter(&$form, &$form_state, $form_id) {
+//organisation
+  if ($form_id == 'organisation_node_form') {
+    if (!isset($new_options)) {
+      $nid = $form['nid']["#value"];
+      $new_options = mkb_org_options($nid);
+      $language = $form['field_parent_organisation']['#language'];
+      $form['field_parent_organisation'][$language]['#options'] = $new_options;
+ // Vis ikke felter i formularen
+	  if(isset($form['field_org_name'])) $form['field_org_name']['#access'] = 0;
+	  if(isset($form['field_org_path'])) $form['field_org_path']['#access'] = 0;
+      if(!in_array('project member',$GLOBALS['user'] -> roles) &&  !in_array('administrator',$GLOBALS['user'] -> roles)) {
+	    if(isset($form['field_mapping'])) $form['field_mapping']['#access'] = 0;
+	  }
+//      if(!in_array('administrator',$GLOBALS['user'] -> roles)) {
+// Always hide these two fields until maybe use some day
+	    if(isset($form['field_mapping'])) $form['field_mapping']['#access'] = 0;
+	    if(isset($form['field_new_author'])) $form['field_new_author']['#access'] = 0;
+//	  }	  
+    }
+  }
+
+// Project participants
+  if ($form_id == 'project_participants_node_form') {
+    if (!isset($new_options)) {
+      $nid = $form['nid']["#value"];
+      $new_options = mkb_org_options($nid);
+      $language = $form['field_participant_organisation']['#language'];
+      $form['field_participant_organisation'][$language]['#options'] = $new_options;
+    }
+  }
+// Profile 2
+  if ($form_id == 'profile2_edit_main_form') {
+    if (!isset($new_options)) {
+      $new_options = mkb_org_options(0);
+      $language = $form['profile_main']['field_my_organisation']['#language'];
+      $form['profile_main']['field_my_organisation'][$language]['#options'] = $new_options;
+    }
+  }
+  if ($form_id == 'views_form_send_mail_page') {
+    $form = mkb_basic_mail($form, $form_state, $form_id);
+  }
+}
+
+/**
+ * Implementation of hook_node_presave()
+ */
+function mkb_org_node_presave($node) {
+  if ($node ->type=='organisation') {
+    if (isset($node -> field_parent_organisation['und'][0]['target_id'])) {
+      $node_pid = $node -> field_parent_organisation['und'][0]['target_id'];
+      $parent_org_name = mkb_org_name($node_pid, 'org_name');
+      $parent_org_path = mkb_org_name($node_pid, 'org_path');
+      $parent_street_name = mkb_org_name($node_pid, 'street_name');
+      $parent_house_number = mkb_org_name($node_pid, 'house_number');
+      $parent_zip = mkb_org_name($node_pid, 'zip');
+      $parent_city = mkb_org_name($node_pid, 'city');
+      $parent_country = mkb_org_name($node_pid, 'country');
+      $parent_region = mkb_org_name($node_pid, 'region');
+
+      $node -> field_org_name['und'][0]['value'] =  '<strong>' . $node -> title . '</strong><br>' . strip_tags($parent_org_name, '<br>');
+      $node -> field_org_name['und'][0]['format'] = 'full_html';
+      $node -> field_org_path['und'][0]['value'] = $parent_org_path . ' - ' . $node -> title;
+
+      if (!isset($node -> field_city['und'][0]['value'])) $node -> field_city['und'][0]['value'] = $parent_city;
+      if (!isset($node -> field_street_name['und'][0]['value'])) $node -> field_street_name['und'][0]['value'] = $parent_street_name;
+      if (!isset($node -> field_house_number['und'][0]['value'])) $node -> field_house_number['und'][0]['value'] = $parent_house_number;
+      if (!isset($node -> field_zip['und'][0]['value'])) $node -> field_zip['und'][0]['value'] = $parent_zip;
+      if (!isset($node -> field_city['und'][0]['value'])) $node -> field_city['und'][0]['value'] = $parent_city;
+      if (!isset($node -> field_country['und'][0]['iso2'])) $node -> field_country['und'][0]['iso2'] = $parent_country;
+      if (!isset($node -> field_region['und'][0]['value'])) $node -> field_region['und'][0]['value'] = $parent_region;
+    }
+    else {
+
+      $node -> field_org_name['und'][0]['format'] = 'full_html';
+      $node -> field_org_name['und'][0]['value'] = '<strong>' . $node -> title . '</strong>';
+      $node -> field_org_path['und'][0]['value'] = $node -> title;
+    }
+
+//    //Author control
+//    if(isset($node -> original -> uid)){
+//      $node -> uid = $node -> original ->uid;
+//    }
+//    if(isset($node -> field_new_author['und'][0]['target_id'])){
+//    $new_author_uid = $node -> field_new_author['und'][0]['target_id'];
+//    $node -> uid = $new_author_uid;
+//    $node -> field_new_author = "<Uninitialized>";
+//    }
+
+  }
+}
+
+/**
+ * Implementation of hook_profile2_view_alter()
+ */
+  function mkb_org_profile2_view_alter(&$build) {
+  if (isset($build['field_my_organisation']['#items'][0]['target_id'])) {
+    $pid = $build['field_my_organisation']['#items'][0]['target_id'];
+    $build['field_my_organisation'][0]['#markup'] = mkb_org_name($pid, 'org_name');
+  }
+  for($i=0; $i<10; $i++) {
+    if (isset($build['field_social_media'][$i]['#markup'])) {
+      $str = $build['field_social_media'][$i]['#markup'];
+      if (substr_count($str,'http')) {
+        $txt = substr($str, 0, strpos($str,'http'));
+        $url = trim(substr($str, strpos($str,'http')));
+        $link = $txt . '<a href="' . $url . '" target="_blank">' . $url . '</a>';
+        $build['field_social_media'][$i]['#markup'] = $link;
+	  }
+    }
+  }
+}
+
+/*
+ * Implementation of hook_menu()
+ */
+function mkb_org_menu(){
+    $items['organisation-contacts/%'] = array(
+      'description' => 'Find users related to an organisation',
+      'page callback' => 'mkb_org_contacts_function',
+      'page arguments' => array(1),
+      'access arguments' => array(1),
+      'access callback' => 'mkb_org_contacts_access',
+    );
+    return $items;
+}
+
+/*
+ * Page access
+ */
+function mkb_org_contacts_access($nid){
+  return TRUE;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_org_theme($existing, $type, $theme, $path) {
+  $templates = array (
+      'mkb_org_contacts_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'organisation-contacts',
+          'path' => drupal_get_path('module', 'mkb_org') . '/theme',
+      ),
+  );
+  return $templates;
+}
+
+/*
+ * Page content
+ */
+function mkb_org_contacts_function($nid) {
+  // Find top organisation
+  $pid = mkb_org_top_organisation($nid);
+  $contacts = array();
+  $level = 0;
+  // Top's contacts
+  mkb_org_contacts($contacts, $level, $pid);
+  // Find children organisations and look after contacts
+  mkb_org_children_organisations($contacts, $level, $pid);
+  $variables = array();
+  $variables['offset_nid'] = $nid; 
+  $variables['contacts'] = $contacts;
+  return theme('mkb_org_contacts_template', $variables);
+}
+
+function mkb_org_top_organisation($nid) {
+  $pid = $nid;
+  $query = db_select('field_data_field_parent_organisation', 'p');
+  $query
+  ->fields('p', array('field_parent_organisation_target_id'))
+  ->condition('p.entity_id', $nid)
+  ;
+  $result = $query->execute() -> fetchAll();
+  if ($result) {
+    $pid = $result[0] -> field_parent_organisation_target_id;
+	$pid = mkb_org_top_organisation($pid);
+  }
+  return $pid;
+}
+
+function mkb_org_children_organisations(&$contacts, $level, $pid) {
+  $query = db_select('field_data_field_parent_organisation', 'p');
+  $query
+  ->fields('p', array('entity_id'))
+  ->condition('p.field_parent_organisation_target_id', $pid)
+  ;
+  $result = $query->execute() -> fetchAll();
+  if ($result) {
+	$level++;
+    foreach ($result as $row) {
+      $nid = $row -> entity_id;
+	  mkb_org_contacts($contacts, $level, $nid);
+	  mkb_org_children_organisations($contacts, $level, $nid);
+    }
+  }
+}
+
+function mkb_org_contacts(&$contacts, $level, $nid) {
+  $query = db_select('node', 'n');
+  $query->leftJoin('field_data_field_country', 'c', 'n.nid = c.entity_id');
+  $query->leftJoin('field_data_field_email', 'e', 'n.nid = e.entity_id AND e.bundle = n.type');
+  $query->leftJoin('field_data_field_exposed', 'x', 'n.nid = x.entity_id AND e.bundle = n.type');
+  $query->leftJoin('field_data_field_my_organisation', 'm', 'n.nid = m.field_my_organisation_target_id');
+  $query
+  ->fields('n', array('title', 'nid'))
+  ->fields('c', array('field_country_iso2'))
+  ->fields('e', array('field_email_value'))
+  ->fields('x', array('field_exposed_value'))
+  ->fields('m', array('entity_id'))
+  ->condition('n.nid', $nid)
+  ->condition('n.type', 'organisation')
+  ->condition('c.bundle', 'organisation')
+  ->addTag('node_access')
+  ;
+  $result = $query->execute() -> fetchAll();
+  if ($result) {
+    $users = mkb_org_profile_user($result[0] -> entity_id);
+    $contacts[$nid]['data'] = $result[0];
+    $contacts[$nid]['level'] = $level;
+    $contacts[$nid]['users'] = $users;
+  }
+}
+
+function mkb_org_profile_user($pid) {
+  $query = db_select('profile', 'p');
+  $query->leftJoin('field_data_field_first_name', 'f', 'p.uid = f.entity_id');
+  $query->leftJoin('field_data_field_last_name', 'l', 'p.uid = l.entity_id');
+  $query->leftJoin('field_data_field_expose_my_data', 'x', 'p.uid = x.entity_id');
+  $query
+  ->fields('p', array('uid'))
+  ->fields('f', array('field_first_name_value'))
+  ->fields('l', array('field_last_name_value'))
+  ->fields('x', array('field_expose_my_data_value'))
+  ->condition('p.pid', $pid)
+  ;
+  $result = $query->execute() -> fetchAll();
+  if ($result) {
+    return $result;
+  }
+  else return null;
+}

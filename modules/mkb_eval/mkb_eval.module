@@ -1,0 +1,618 @@
+<?php
+/**
+ * @file
+ * Code for the Evaluation content types feature.
+ */
+
+include_once 'mkb_eval.features.inc';
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.evaluation_overview.inc');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.evaluation_group');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.evaluation_summary');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.evaluation_status');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.evaluation_experts');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.conf_types');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.application_partners');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.list_conf_types');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.mkb_eval.list_evaluations');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.prop_by_funding_agency');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.prop_by_coordinator');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.expert_results');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.paths');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.relation_admin');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.relation_overview');
+module_load_include('inc', 'mkb_eval', 'includes/pages/mkb_eval.relation_proposals');
+
+
+
+module_load_include('inc', 'mkb_eval', 'includes/forms/mkb_eval.application_selection');
+module_load_include('inc', 'mkb_eval', 'includes/forms/mkb_eval.application_selection_topic');
+module_load_include('inc', 'mkb_eval', 'includes/forms/mkb_eval.conflict_missing');
+module_load_include('inc', 'mkb_eval', 'includes/forms/mkb_eval.evaluation_missing');
+
+module_load_include('inc', 'mkb_eval', 'includes/form_alter/mkb_eval.evaluation');
+module_load_include('inc', 'mkb_eval', 'includes/form_alter/mkb_eval.expert_evaluators');
+module_load_include('inc', 'mkb_eval', 'includes/form_alter/mkb_eval.evaluation_conflict');
+module_load_include('inc', 'mkb_eval', 'includes/form_alter/mkb_eval.evaluation_expert');
+module_load_include('inc', 'mkb_eval', 'includes/form_alter/mkb_eval.application_relation');
+
+module_load_include('inc', 'mkb_eval', 'includes/redirect/mkb_eval.redirect');
+
+module_load_include('inc', 'mkb_eval', 'includes/mkb_eval.custom_theme');
+
+/**
+ * Implements hook_menu()
+ */
+function mkb_eval_menu(){
+    // Pages
+    $items['eval/%/%'] = array(
+      'title' => '',
+      'description' => 'Evaluation views',
+      'page callback' => 'mkb_eval_evaluation_overview',
+      'page arguments' => array(1,2),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(1),
+      'file' => 'includes/pages/mkb_eval.evaluation_overview.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval_expert/%/%'] = array(
+      'title' => '',
+      'description' => 'Experts evaluation views',
+      'page callback' => 'mkb_eval_evaluation_overview',
+      'page arguments' => array(1,2),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(1),
+      'file' => 'includes/pages/mkb_eval.evaluation_overview.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/expert_resubmit/%/%'] = array(
+      'title' => '',
+      'description' => 'Experts evaluation views',
+      'page callback' => 'mkb_eval_evaluation_overview',
+      'page arguments' => array(2,3),
+      'access arguments' => array('access content'),
+      'file' => 'includes/pages/mkb_eval.evaluation_overview.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/group/%'] = array(
+      'title' => '',
+      'description' => 'Group Evaluations',
+      'page callback' => 'evaluation_group_page_function',
+      'page arguments' => array(2),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/pages/mkb_eval.evaluation_group.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/summary/%/%/%'] = array(
+      'title' => '',
+      'description' => 'Evaluation summary',
+      'page callback' => 'evaluation_summary_page_function',
+      'page arguments' => array(2,3,4),
+      'access callback' => 'mkb_eval_experts_page_access',
+//      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/pages/mkb_eval.evaluation_summary.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/status/%/%/%'] = array(
+      'title' => '',
+      'description' => 'Evaluation status',
+      'page callback' => 'evaluation_status_page_function',
+      'page arguments' => array(2,3,4),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/pages/mkb_eval.evaluation_status.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/conf_types/%/%'] = array(
+      'title' => 'Expert evaluation types',
+      'description' => 'List all Expert evaluation configuration types for this call',
+      'page callback' => 'mkb_eval_conf_types',
+      'page arguments' => array(2,3),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/pages/mkb_eval.conf_types.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/application_experts/%/%/%'] = array(
+      'title' => '',
+      'description' => 'List application expert evaluators',
+      'page callback' => 'mkb_eval_evaluation_experts',
+      'page arguments' => array(2,3,4),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/pages/mkb_eval.evaluation_experts.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/application_partners/%/%'] = array(
+      'title' => '',
+      'description' => 'List of all applications (topic, id, acronym,
+        partner contact and partner organisation) selected in stage 2',
+      'page callback' => 'mkb_eval_application_partners',
+      'page arguments' => array(2,3),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/pages/mkb_eval.application_partners.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/list/eval_conf_types/%/%/%'] = array(
+      'title' => 'Evaluation configuration types',
+      'description' => 'List evaluation configuration types for this call',
+      'page callback' => 'mkb_eval_list_conf_types',
+      'page arguments' => array(3,4,5),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(3),
+      'file' => 'includes/pages/mkb_eval.list_conf_types.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/list/evaluations/%/%/%/%'] = array(
+      'title' => '',
+      'description' => 'List of all evaluations for call and evaluation configuration (sorted by topic and application)',
+      'page callback' => 'mkb_eval_list_evaluations',
+      'page arguments' => array(3,4,5,6),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(3),
+      'file' => 'includes/pages/mkb_eval.list_evaluations.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/statistics/prop_by_funding_agency/%/%'] = array(
+      'title' => 'Number of proposals by funding agency',
+      'description' => 'List the numbers of proposals by funding agency with budget data',
+      'page callback' => 'mkb_eval_prop_by_funding_agency',
+      'page arguments' => array(3,4),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(3),
+      'file' => 'includes/pages/mkb_eval.prop_by_funding_agency.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/statistics/prop_by_coordinator/%/%'] = array(
+      'title' => 'Number of proposals by proposal coordinator',
+      'description' => 'List the numbers of proposals by proposal coordinator country with budget data',
+      'page callback' => 'mkb_eval_prop_by_coordinator',
+      'page arguments' => array(3,4),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(3),
+      'file' => 'includes/pages/mkb_eval.prop_by_coordinator.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/list/proposal_budgets/%/%'] = array(
+      'title' => 'Proposal budgets',
+      'description' => 'List all proposal budgets and countries',
+      'page callback' => 'mkb_eval_proposal_budgets',
+      'page arguments' => array(3,4),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(3),
+      'file' => 'includes/pages/mkb_eval.proposal_budgets.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/paths'] = array(
+        'title' => 'Evaluation paths',
+        'description' => 'List all menu paths for the evaluation module with arguments',
+        'page callback' => 'mkb_eval_paths',
+        'page arguments' => array(),
+        'access callback' => 'mkb_eval_saf_access',
+        'file' => 'includes/pages/mkb_eval.paths.inc',
+        'type' => MENU_CALLBACK,
+    );
+    $items['relation/admin/%/%'] = array(
+      'title' => 'Edit Proposal relations',
+      'description' => 'Administration of proposal relations',
+      'page callback' => 'mkb_eval_relation_admin',
+      'page arguments' => array(2,3),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/pages/mkb_eval.relation_admin.inc',
+      'type' => MENU_CALLBACK,
+    );    
+    $items['relation/overview/%/%'] = array(
+      'title' => 'Proposal relations overview',
+      'description' => 'Overview of proposal relations',
+      'page callback' => 'mkb_eval_relation_overview',
+      'page arguments' => array(2,3),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/pages/mkb_eval.relation_overview.inc',
+      'type' => MENU_CALLBACK,
+    );    
+    $items['relation/view/proposals/%/%/%/%'] = array(
+      'title' => 'Selected proposals relations',
+      'description' => 'Proposal relation for two selected proposals',
+      'page callback' => 'mkb_eval_relation_proposals',
+      'page arguments' => array(3,4,5,6),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(3),
+      'file' => 'includes/pages/mkb_eval.relation_proposals.inc',
+      'type' => MENU_CALLBACK,
+    );    
+   
+  
+
+    // Forms
+    $items['eval/application_selection/%/%/%'] = array(
+      'title' => 'Application selection for all topics',
+      'description' => 'Application selection for all topics',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mkb_eval_application_selection_form',2,3,4),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/forms/mkb_eval.application_selection.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/application_selection_topic/%/%/%/%'] = array(
+      'title' => 'Application selection for the selected topic',
+      'description' => 'Application selection for the selected topic',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mkb_eval_application_selection_topic_form',2,3,4,5),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/forms/mkb_eval.application_selection_topic.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/application_experts/mail/conflict/%/%/%'] = array(
+      'title' => 'Email experts missing to declare conflict of interest',
+      'description' => "List application expert evaluators that haven't declared a conflict of interest",
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mkb_eval_conflict_missing_form',4,5),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(4),
+      'file' => 'includes/forms/mkb_eval.conflict_missing.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/application_experts/mail/eval/%/%/%'] = array(
+      'title' => 'Email experts missing to create evaluations',
+      'description' => "List application expert evaluators that haven't created an evaluation",
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mkb_eval_eval_missing_form',4,5),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(4),
+      'file' => 'includes/forms/mkb_eval.evaluation_missing.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/selection_calc/%'] = array(
+      'title' => 'Calculation of funding agency contributions and application selection',
+      'description' => "Calculation of funding agency contributions and application selection",
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mkb_eval_selection_calc_form', 2),
+      'access callback' => 'mkb_eval_experts_page_access',
+      'access arguments' => array(2),
+      'file' => 'includes/forms/mkb_eval.selection_calc.inc',
+      'type' => MENU_CALLBACK,
+    );
+    $items['eval/expert/results/%/%'] = array(
+      'title' => 'Expert evaluation results',
+      'description' => 'List all expert evaluation type results',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mkb_eval_expert_results_form',3,4),
+      'access callback' => 'evaluation_page_access',
+      'access arguments' => array(3),
+      'file' => 'includes/pages/mkb_eval.expert_results.inc',
+      'type' => MENU_CALLBACK,
+    );
+
+    // Redirects
+    $items['eval/select_expert/%/%'] = array(
+      'title' => 'Select evaluation expert application',
+      'description' => 'Set eval_expert_application expert_selected to 1 and redirect back',
+      'page callback' => 'mkb_eval_select_expert_application',
+      'page arguments' => array(2,3),
+      'access callback' => 'mkb_eval_saf_access',
+//       'access arguments' => array(),
+      'file' => 'includes/redirect/mkb_eval.redirect.inc',
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+    );
+    return $items;
+}
+
+function mkb_eval_saf_access(){
+  return TRUE;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_eval_theme($existing, $type, $theme, $path) {
+  $items = array (
+      'evaluation_page_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'evaluation_page',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'evaluation_group_page_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'evaluation_group_page',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'evaluation_summary_page_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'evaluation_summary_page',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'evaluation_status_page_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'evaluation_status_page',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'mkb_eval_application_selection_form_table' => array(
+          'arguments' => array('form' => NULL),
+          'render element' => 'form',
+      ),
+      'evaluation_experts_page_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'evaluation_experts_page',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'evaluation_conf_types_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'evaluation_conf_types',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'application_partners' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'application_partners',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'list_conf_types_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'list_conf_types',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'list_evaluations_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'list_evaluations',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'node__evaluation' => array (
+          'variables' => array('content' => NULL),
+          'template' => 'node--evaluation' ,
+          'base hook' => 'node',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+          ),
+      'prop_by_funding_agency' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'prop_by_funding_agency',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'prop_by_coordinator' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'prop_by_coordinator',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'proposal_budgets' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'proposal_budgets',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'paths' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'paths',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'relation_admin' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'relation_admin',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'relation_overview' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'relation_overview',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      'relation_proposals' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'relation_proposals',
+          'path' => drupal_get_path('module', 'mkb_eval') . '/theme',
+      ),
+      );
+  return $items;
+}
+
+/**
+ * Determines access for evaluation_experts page.
+ *
+ * @return $access
+ *   TRUE : 1. Current user has 'Call admin','Administrator' or 'Expert evaluator' role.
+ */
+function mkb_eval_experts_page_access($cid){
+  $account = $GLOBALS['user'];
+
+  if (in_array('administrator', $account->roles) || in_array('call administrator', $account->roles)) return TRUE;
+
+  $access = FALSE;
+  $access = mkb_eval_access_helper($cid);
+  return $access;
+}
+
+/**
+ * Determines access for evaluation_page.
+ *
+ * @param $cid
+ *   The call this evaluation belongs to.
+ * @return $access
+ *   TRUE : 1. Current user has 'Call admin', 'Administrator' or 'Expert evaluator' role.
+ *          2. Current user is added as 'Call manager' or 'Evaluator' in call-funder-page for this call.
+ */
+function evaluation_page_access($cid){
+  $account = $GLOBALS['user'];
+
+  // Administrator and Call administrator access always granted
+  if (in_array('administrator', $account->roles) || in_array('call administrator', $account->roles)) return TRUE;
+
+  // Users added as Managers and Evaluators in call-funder-pages has access
+  if(mkb_eval_get_manager_funder_pages($cid, $account->uid) != FALSE) return TRUE;
+  if(mkb_eval_get_evaluator_funder_pages($cid, $account->uid) != FALSE) return TRUE;
+  return FALSE;
+//   // Check if current user is an expert evaluator
+//   $access = FALSE;
+//   $access = mkb_eval_access_helper($cid);
+//   return $access;
+}
+
+/**
+ * Determines access for evaluation experts
+ *
+ * @param $cid
+ *   The call this evaluation belongs to.
+ * @return $access
+ *   TRUE : Current user is added as evaluation expert.
+ */
+function mkb_eval_access_helper($cid){
+  $account = $GLOBALS['user'];
+
+  $access = FALSE;
+  // Get all Expert applications
+  $query = new EntityFieldQuery();
+
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'eval_expert_application')
+    ->propertyCondition('status', NODE_PUBLISHED)
+    ->fieldCondition('field_call_id', 'target_id', $cid, '=')
+    ->addMetaData('account', user_load(1)); // Run the query as user 1.
+//     ->fieldCondition('field_expert_selected', 'value', 1, '=');
+  $result = $query->execute();
+
+  // Check if current user is added as an expert evaluator
+  if (isset($result['node'])) {
+    $expert_application_nids = array_keys($result['node']);
+    $expert_applications = entity_load('node', $expert_application_nids);
+
+    foreach ($expert_applications as $nid => $expert_application){
+      $expert_application_wrapper = entity_metadata_wrapper('node', $expert_application);
+      $evaluator_uid = $expert_application_wrapper->field_expert_usr->raw();
+      if($account->uid == $evaluator_uid) $access = TRUE;
+    }
+  }
+
+  return $access;
+}
+
+/**
+ * Implements hook_mail().
+ */
+function mkb_eval_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'mkb_eval_conflict':
+      $headers = array(
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'text/html; charset=UTF-8; format=flowed',
+        'Content-Transfer-Encoding' => '8Bit',
+        'X-Mailer' => 'Drupal'
+      );
+      foreach ($headers as $key => $value) {
+        $message['headers'][$key] = $value;
+      }
+      $message['subject'] = $params['subject'];
+      $message['body'][] = $params['body'];
+      break;
+
+    case 'mkb_eval_eval':
+      $headers = array(
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'text/html; charset=UTF-8; format=flowed',
+        'Content-Transfer-Encoding' => '8Bit',
+        'X-Mailer' => 'Drupal'
+      );
+      foreach ($headers as $key => $value) {
+        $message['headers'][$key] = $value;
+      }
+      $message['subject'] = $params['subject'];
+      $message['body'][] = $params['body'];
+      break;
+  }
+}
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function mkb_eval_preprocess_node(&$variables){
+  if($variables['type'] == "evaluation"){
+    $content = mkb_eval_evaluation_view($variables['node']);
+    $variables['content'] = $content;
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_eval_form_alter(&$form, $form_state, $form_id) {
+  if($form_id == 'expert_evaluators_node_form'){
+    mkb_eval_expert_evaluators_alter($form, $form_state, $form_id);
+  }
+  if($form_id == 'evaluation_conflict_node_form'){
+    mkb_eval_evaluation_conflict_alter($form, $form_state, $form_id);
+  }
+  if($form_id == 'evaluation_node_form'){
+    mkb_eval_evaluation_alter($form, $form_state, $form_id);
+  }
+  if($form_id == 'eval_expert_application_node_form'){
+    mkb_eval_evaluation_expert_alter($form, $form_state, $form_id);
+  }
+  if($form_id == 'application_relation_node_form'){
+    mkb_eval_application_relation_alter($form, $form_state, $form_id);
+  }
+}
+
+/**
+ * Implements hook_block_view_alter().
+ */
+function mkb_eval_block_view_alter(&$data, $block) {
+  switch ($block->delta) {
+    case 'menu-expert-evaluation':
+      $account = $GLOBALS['user'];
+      
+      // Get links that are used for evaluation experts overview pages
+      $children = array_intersect_key($data['content'], array_flip(element_children($data['content'])));
+      foreach($children as $mlid => $child){
+        $href_arg = explode('/', $child['#href']);
+        if($href_arg[0] == 'eval_expert' && count($href_arg) > 4){
+          // Get arguments
+          $cid = $href_arg[1];
+          $eid = substr($href_arg[3], 4);
+          $fid = substr($href_arg[4], 4);          
+
+          // Load groups
+          $groups = mkb_eval_get_filtered_groups($cid, $fid, $eid);
+
+          // Determine if current user is assigned as expert for this child link
+          $unset = TRUE;
+          foreach($groups as $gid => $group){
+            // Get expert evaluators for this group
+            $query = new EntityFieldQuery();
+            $query->entityCondition('entity_type', 'node')
+              ->entityCondition('bundle', 'expert_evaluators')
+              ->propertyCondition('status', NODE_PUBLISHED)
+              ->fieldCondition('og_group_ref', 'target_id', $gid, '=')
+              ->fieldCondition('field_eval_conf', 'target_id', $eid, '=');
+            $result = $query->execute();
+
+            if (isset($result['node'])) {
+              $expert_evaluators_nids = array_keys($result['node']);
+              $expert_evaluator = node_load($expert_evaluators_nids[0]);
+              $expert_evaluator_wrapper = entity_metadata_wrapper('node', $expert_evaluator);
+
+              foreach ($expert_evaluator_wrapper->field_expert_application_id->getIterator() as $delta => $application_expert_wrapper) {
+                $evaluator_uid = $application_expert_wrapper->field_expert_usr->raw();
+                if($account->uid == $evaluator_uid) $unset = FALSE;
+              }
+            }
+          }
+          // Remove link if current user is not assigned as expert for the link
+          if($unset){
+            unset($data['content'][$mlid]);
+          }     
+        }
+      }
+      break;
+  }
+}
+
+/**
+ * Save Proposal relations in integer fields.
+ *
+ * Implementation of hook_node_presave()
+ */
+function mkb_eval_node_presave($node){
+  if ($node->type=='application_relation') {
+    if(isset($node->og_group_ref[LANGUAGE_NONE][0]['target_id'])) $node->field_rel_proposal_1[LANGUAGE_NONE][0]['value'] = $node->og_group_ref[LANGUAGE_NONE][0]['target_id'];
+    if(isset($node->og_group_ref[LANGUAGE_NONE][1]['target_id'])) $node->field_rel_proposal_2[LANGUAGE_NONE][0]['value'] = $node->og_group_ref[LANGUAGE_NONE][1]['target_id'];
+  }
+}

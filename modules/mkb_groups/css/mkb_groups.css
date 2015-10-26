@@ -1,0 +1,9 @@
+.groups_table table,tr,td{
+  vertical-align: top !important;
+}
+.groups_first_row{
+  width: 85%;
+}
+.groups_second_row{
+  width: 15%;
+}

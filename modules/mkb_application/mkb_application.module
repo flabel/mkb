@@ -1,0 +1,292 @@
+<?php
+/**
+ * @file
+ * Code for the mkb_application feature.
+ */
+
+include_once 'mkb_application.features.inc';
+module_load_include('inc', 'mkb_application', 'includes/blocks/mkb_application.blocks');
+
+module_load_include('inc', 'mkb_application', 'includes/forms/mkb_application.manage_members');
+module_load_include('inc', 'mkb_application', 'includes/forms/mkb_application.dow');
+module_load_include('inc', 'mkb_application', 'includes/forms/mkb_application.application_submit');
+
+module_load_include('inc', 'mkb_application', 'includes/pages/mkb_application.application_home');
+module_load_include('inc', 'mkb_application', 'includes/pages/mkb_application.edit_application');
+module_load_include('inc', 'mkb_application', 'includes/pages/mkb_application.application_page');
+module_load_include('inc', 'mkb_application', 'includes/pages/mkb_application.call_documents');
+module_load_include('inc', 'mkb_application', 'includes/pages/mkb_application.feedback');
+
+module_load_include('inc', 'mkb_application', 'includes/form_alter/mkb_application.group');
+module_load_include('inc', 'mkb_application', 'includes/form_alter/mkb_application.partner_budget');
+module_load_include('inc', 'mkb_application', 'includes/form_alter/mkb_application.partner_info');
+module_load_include('inc', 'mkb_application', 'includes/form_alter/mkb_application.project_info');
+
+module_load_include('inc', 'mkb_application', 'includes/mkb_application.helper');
+
+/**
+ * Implements hook_menu()
+ */
+function mkb_application_menu(){
+  // FORMS
+  $items['groups/workspace/group_members/%'] = array(
+    'description' => 'Manage group members',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('mkb_application_group_members_form',3),
+    'access arguments' => array(3),
+    'access callback' => 'mkb_groups_members_access',
+    'file' => 'includes/forms/mkb_application.manage_members.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['groups/workspace/dow/%'] = array(
+    'description' => 'Description of work',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('mkb_application_dow_form',3),
+    'access arguments' => array(3),
+    'access callback' => 'mkb_groups_members_access',
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/forms/mkb_application.dow.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['groups/workspace/application_submit/%'] = array(
+    'description' => 'Submit application',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('mkb_application_application_submit_form',3),
+    'access arguments' => array(3),
+    'access callback' => 'mkb_groups_members_access',
+    'file' => 'includes/forms/mkb_application.application_submit.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  // PAGES
+  $items['groups/workspace/%'] = array(
+    'title' => '',
+    'description' => 'General information about call, application and group.',
+    'page callback' => 'mkb_application_home_function',
+    'page arguments' => array(2),
+    'access arguments' => array(2),
+    'access callback' => 'mkb_groups_members_access',
+    'file' => 'includes/pages/mkb_application.application_home.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['groups/workspace/edit_app/%'] = array(
+    'title' => '',
+    'description' => 'An overview of users and their applications.',
+    'page callback' => 'edit_application_function',
+    'page arguments' => array(3),
+    'access arguments' => array(3),
+    'access callback' => 'mkb_groups_members_access',
+    'file' => 'includes/pages/mkb_application.edit_application.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['groups/workspace/application_page/%'] = array(
+    'title' => '',
+    'description' => 'This page collates the data provided by the project consortium into one page.',
+    'page callback' => 'application_page_function',
+    'page arguments' => array(3),
+    'access arguments' => array(3),
+    'access callback' => 'mkb_appliaction_page_access',
+    'file' => 'includes/pages/mkb_application.application_page.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['groups/workspace/call_documents/%'] = array(
+    'title' => '',
+    'description' => 'Call documents',
+    'page callback' => 'mkb_application_call_documents_function',
+    'page arguments' => array(3),
+    'access arguments' => array('access content'),
+    'file' => 'includes/pages/mkb_application.call_documents.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['groups/workspace/feedback/%'] = array(
+    'title' => '',
+    'description' => 'Feedback with evaluations',
+    'page callback' => 'mkb_feedback_application_function',
+    'page arguments' => array(3),
+    'access arguments' => array(3),
+    'access callback' => 'mkb_groups_members_access',
+    'file' => 'includes/pages/mkb_application.feedback.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+function mkb_appliaction_page_access($gid){
+  $account = $GLOBALS['user'];  
+  if(og_is_member('node', $gid, $entity_type = 'user', $entity = NULL, $states = array(OG_STATE_ACTIVE))) return TRUE;
+  if (in_array('administrator', $account->roles) || in_array('call administrator', $account->roles)) return TRUE;
+  
+  $access = FALSE;
+  if(function_exists('mkb_eval_access_helper')){
+    $group = node_load($gid);
+    $group_wrapper = entity_metadata_wrapper('node', $group);
+    $cid = $group_wrapper->field_group_application->raw();
+    if($cid) $access = mkb_eval_access_helper($cid);
+  }
+  return $access;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_application_theme($existing, $type, $theme, $path) {
+  $templates = array (
+      'application_home' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'application_home',
+          'path' => drupal_get_path('module', 'mkb_application') . '/theme',
+      ),
+      'node__application_partner_budget' => array (
+          'variables' => array('content' => NULL),
+          'template' => 'node--application_partner_budget' ,
+          'base hook' => 'node',
+          'path' => drupal_get_path('module', 'mkb_application') . '/theme',
+      ),
+      'edit_application_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'edit_application',
+          'path' => drupal_get_path('module', 'mkb_application') . '/theme',
+      ),
+      'application_page_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'application_page',
+          'path' => drupal_get_path('module', 'mkb_application') . '/theme',
+      ),
+      'call_documents_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'call_documents',
+          'path' => drupal_get_path('module', 'mkb_application') . '/theme',
+      ),
+      'feedback_application_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'feedback_application',
+          'path' => drupal_get_path('module', 'mkb_application') . '/theme',
+      ),
+  );
+  return $templates;
+}
+
+/**
+ * @param $variables
+ */
+function mkb_application_preprocess_node(&$variables){
+  if($variables['type'] == "application_partner_budget"){
+     $variables['budget_table'][] = mkb_application_get_budget_table($variables['nid']);
+  }
+}
+
+/**
+ * Implements hook_block_info()
+ */
+function mkb_application_block_info() {
+  $blocks['application'] = array(
+    'info' => 'Application',
+  'status' => TRUE,
+    'region' => 'sidebar_first',
+    'weight' => -21,
+  );
+  return $blocks;
+}
+
+/**
+ * Note mkb_groups_block_visibility('groups'): application block has same visibility settings as groups block
+ * @see mkb_groups_block_visibility($delta = '')
+ *
+ * Implements hook_block_view()
+ */
+function mkb_application_block_view($delta = '') {
+  $block = array();
+  if ($delta == 'application') {
+    if (mkb_groups_block_visibility('groups')) {
+      $block = array(
+        'subject' => 'Application',
+      'content' => mkb_application_block_content(),
+      );
+  }
+  }
+  return $block;
+}
+
+/**
+ * Requires key to be set in mail system for mkb_application.
+ * HTML mail and mail system must be installed.
+ *
+ * Implements hook_mail().
+ */
+function mkb_application_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'app_submit':
+      $headers = array(
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'text/html; charset=UTF-8; format=flowed',
+        'Content-Transfer-Encoding' => '8Bit',
+        'X-Mailer' => 'Drupal'
+      );
+      foreach ($headers as $key => $value) {
+        $message['headers'][$key] = $value;
+      }
+      $message['subject'] = $params['subject'];
+      $message['body'][] = $params['body'];
+      break;
+  }
+}
+
+/**
+ * Implements hook_node_prepare().
+ */
+function mkb_application_node_prepare($node) {
+  $multiple = FALSE;
+  if ($node->type == 'application_project_info') {
+    $multiple = FALSE;
+    mkb_application_group_content_control($node, $multiple);
+  }
+  elseif($node->type == 'application_partner_info' || $node->type == 'application_partner_budget'){
+    $multiple = TRUE;
+    mkb_application_group_content_control($node, $multiple);
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_application_form_alter(&$form, $form_state, $form_id) {
+  if ($form_id == "application_partner_budget_node_form") {
+    $form = mkb_application_partner_budget($form, $form_state, $form_id);
+  }
+  if ($form_id == "application_project_info_node_form") {
+    $form = mkb_application_project_info($form, $form_state, $form_id);
+  }
+  if ($form_id == "application_partner_info_node_form") {
+    $form = mkb_application_partner_info($form, $form_state, $form_id);
+  }
+  if ($form_id == "group_node_form") {
+    $form = mkb_application_group($form, $form_state, $form_id);
+  }
+}
+
+/**
+ * Set the author of the row in edit_application_page even though project coordinator
+ * or project editor creates the node.
+ *
+ * Set submit time to current date if submitted is checked in form.
+ *
+ * Implementation of hook_node_presave()
+ */
+function mkb_application_node_presave($node){
+  if ($node->type=='application_project_info' || $node->type=='application_partner_info' ||
+      $node->type=='application_partner_budget') {
+    $id = arg(3);
+    if($id[0] == 'u'){
+      $uid = substr($id, 2, strlen($id));
+      if(user_load($uid) !== FALSE) $node->uid = $uid;      
+    }
+    unset($_SESSION["app_uid"]); // Used when coordinator or editor edit, must be unset before edit of another node
+  }
+  if ($node->type=='application_project_info') {
+    if($node->field_app_submitted['und'][0]['value']){
+      $node->field_app_submit_time['und'][0]['value'] = array(
+        'value' => date('Y-m-d H:i', strtotime('now'))
+      );
+    }
+  }
+}

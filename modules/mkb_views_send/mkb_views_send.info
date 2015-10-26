@@ -1,0 +1,12 @@
+; $Id$
+; Read more about Drupal 7 .info files here: http://drupal.org/node/542202
+name = MKB Views Send
+description = Adds facility to open mail in my own mail client
+dependencies[] = views
+dependencies[] = views_send
+package = Meta Knowledge Base
+version = "7.x-1.0"
+core = 7.x
+php = 5.1
+files[] = mkb_views_send.inc
+files[] = mkb_views_send.module

@@ -1,0 +1,12 @@
+.consultation-table {
+/*   border-width: 1px;
+  border-color: black;
+  border-style:solid;
+ */  
+  vertical-align: top;
+  width: auto;
+}
+.consultation-table-first-column {
+  vertical-align: top;
+  width: 100px;
+}

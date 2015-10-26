@@ -1,0 +1,87 @@
+<?php
+
+module_load_include('inc', 'mkb_webform', 'mkb_webform');
+module_load_include('inc', 'mkb_webform', 'includes/pages/mkb_webform.questionnaire');
+module_load_include('inc', 'mkb_webform', 'includes/form_alter/mkb_webform.questionnaire_1');
+module_load_include('inc', 'mkb_webform', 'includes/blocks/mkb_webform.blocks');
+/**
+ * Implements hook_menu()
+ */
+function mkb_webform_menu(){
+  $items['groups/workspace/questionnaire/%/%'] = array(
+    'title' => '',
+    'description' => 'Questionnaires',
+    'page callback' => 'mkb_webform_questionnaire',
+    'page arguments' => array(3,4),
+    'access callback' => 'mkb_groups_members_access',
+    'access arguments' => array(3),
+    'file' => 'includes/pages/mkb_webform.questionnaire.inc',    
+    'type' => MENU_CALLBACK,
+  );
+  return $items;  
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_webform_theme($existing, $type, $theme, $path) {
+  $templates = array (
+      'questionnaire' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'questionnaire',
+          'path' => drupal_get_path('module', 'mkb_webform') . '/theme',
+      ),
+  );
+  return $templates;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function mkb_webform_form_alter(&$form, &$form_state, $form_id) {
+  $arg = arg();
+  $webform_id = 0;
+  if(count($arg) >= 2){
+    if($arg[0] == 'node' && is_numeric($arg[1])){
+      $node = node_load($arg[1]);
+      if($node->type == 'webform') $webform_id = 'webform_client_form_' . $arg[1];
+    }
+  }
+  if ($form_id == $webform_id) { 
+    $form = mkb_webform_questionnaire_1($form, $form_state, $form_id);
+  }
+}
+
+/**
+ * Implements hook_block_info()
+ */
+function mkb_webform_block_info() {
+  $blocks['questionnaire'] = array(
+    'info' => 'Questionnaire',
+    'status' => TRUE,
+    'region' => 'sidebar_first',
+    'weight' => -21,
+  );
+  return $blocks;
+}
+
+/**
+ * Note mkb_groups_block_visibility('groups'): application block has same visibility settings as groups block
+ * @see mkb_groups_block_visibility($delta = '')
+ *
+ * Implements hook_block_view()
+ */
+function mkb_webform_block_view($delta = '') {
+  $block = array();
+  if ($delta == 'questionnaire') {
+    if (mkb_groups_block_visibility('groups')) {
+      $block = array(
+        'subject' => 'Questionnaire',
+        'content' => mkb_webform_block_content(),
+      );
+    }
+  }
+  return $block;
+}
+
+

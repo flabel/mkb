@@ -1,0 +1,861 @@
+<?php
+
+/**
+ * @file
+ * Code for the mkb_providers feature.
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function mkb_providers_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'mkb_providers'),
+    'template path' => drupal_get_path('module', 'mkb_providers') . '/theme',
+  );
+}
+
+/*
+ * Implementation of hook_view_alter()
+ * Changes provider display to show provider name in field group frame
+ * Replaces field label with description
+ */
+function mkb_providers_entity_view_alter(&$build) {
+  if ($build['#entity_type']=='provider') {
+	$build['#fieldgroups']['group_provider_form_group'] -> label = $build['field_provider_id'][0]['#markup'];
+	$build['field_provider_id']['#access'] = false;
+	$fields = field_info_instances('provider', $build['#bundle']);
+    foreach(element_children($build) as $field_name) {
+	  $build[$field_name]['#title'] = $fields[$field_name]['description'];
+	}
+  }
+}
+
+/*
+ * Implementation of hook_menu()
+ */
+function mkb_providers_menu(){
+    $items['provider/overview/%'] = array(
+      'title' => '',
+      'description' => 'Provider overview',
+      'page callback' => 'mkb_providers_overview_function',
+      'page arguments' => array(2),
+      'access callback' => 'mkb_providers_overview_access',
+      'access arguments' => array(2),
+    );
+    $items['provider/intro/%'] = array(
+      'title' => '',
+      'description' => 'Provider intro',
+      'page callback' => 'mkb_providers_intro_function',
+      'page arguments' => array(2),
+      'access callback' => 'mkb_providers_intro_access',
+      'access arguments' => array(2),
+    );
+    $items['provider/start'] = array(
+      'title' => '',
+      'description' => 'Provider start survey',
+      'page callback' => 'mkb_providers_start_function',
+      'access callback' => 'mkb_providers_start_access',
+    );
+    $items['provider/auto_add/%'] = array(
+      'title' => '',
+      'description' => 'Automatically add provider organisation',
+      'page callback' => 'mkb_providers_auto_add_function',
+      'page arguments' => array(2),
+      'access callback' => 'mkb_providers_auto_add_access',
+	  'access arguments' => array('access content'),
+    );
+    $items['provider/invite_log/%'] = array(
+      'title' => '',
+      'description' => 'Update invitation time in provider organisation',
+      'page callback' => 'mkb_providers_invite_log_function',
+      'page arguments' => array(2),
+      'access callback' => 'mkb_providers_auto_add_access',
+	  'access arguments' => array('access content'),
+    );
+    $items['survey_stats/%'] = array(
+      'title' => '',
+      'description' => 'Provider survey statistics',
+      'page callback' => 'mkb_providers_stats_function',
+      'page arguments' => array(1),
+      'access callback' => 'mkb_providers_start_access',
+    );
+    $items['survey_responses/%/%'] = array(
+      'title' => '',
+      'description' => 'Provider survey responses',
+      'page callback' => 'mkb_providers_responses_function',
+      'page arguments' => array(1,2),
+      'access callback' => 'mkb_providers_start_access',
+    );
+    return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_providers_theme($existing, $type, $theme, $path) {
+  $templates = array (
+      'mkb_providers_overview_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'overview',
+          'path' => drupal_get_path('module', 'mkb_providers') . '/theme',
+      ),
+      'mkb_providers_intro_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'intro',
+          'path' => drupal_get_path('module', 'mkb_providers') . '/theme',
+      ),
+      'mkb_providers_start_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'start',
+          'path' => drupal_get_path('module', 'mkb_providers') . '/theme',
+      ),
+      'mkb_providers_survey_stats_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'survey_stats',
+          'path' => drupal_get_path('module', 'mkb_providers') . '/theme',
+      ),
+      'mkb_providers_survey_responses_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'survey_responses',
+          'path' => drupal_get_path('module', 'mkb_providers') . '/theme',
+      ),
+  );
+  return $templates;
+}
+
+/**
+ * Determines access for ict_page pages.
+ *
+ * @param $pid
+ *   Provider organisation ID.
+ * @return $access
+ *   TRUE : 1. Current user has 'Administrator' role.
+  */
+function mkb_providers_overview_access($pid){
+// $pid is provider-organisation node id
+  global $user;
+  if (isset($pid)) {
+    $this_node = node_load($pid);
+	if ($this_node->uid == $user->uid) return TRUE;
+  }
+  if (in_array('administrator', $user->roles)) return TRUE;
+  if (in_array('project member', $user->roles)) return TRUE;
+  return FALSE;
+}
+
+function mkb_providers_intro_access($uuid){
+// $uuid is unique id of provider's organisation
+//   global $user;
+//   if (in_array('administrator', $user->roles)) return TRUE;
+//   return FALSE;
+  return TRUE;
+}
+
+function mkb_providers_start_access(){
+  return TRUE;
+}
+
+function mkb_providers_auto_add_access($pid){
+// $pid is provider-organisation node id
+//   global $user;
+//   if (in_array('administrator', $user->roles)) return TRUE;
+//   return FALSE;
+  return TRUE;
+}
+
+/**
+ * Preprocess views
+ *
+ * Creates email with text and link to provider survey 
+ * Shows nothing if no email or not added to survey
+ * '%0D%0A' = linebreak
+ *
+ * @param $variables
+ *   Variables.
+  */
+function mkb_providers_preprocess_views_view_table(&$variables){
+  $view = $variables['view'];
+  if($view->name == "provider_organisation" || $view->name == "provider_extra"){
+    global $user;
+    foreach ($variables['rows'] as $i => $row){
+      $nid = $row['nid_1']; // Id of provider's organisation
+// Get provider-organisation id
+	  if ($nid) $pid = mkb_providers_get_parent_organisation_id($nid);
+	  else $pid = NULL;
+// If there is a provider-organisation set Survey field to a link to the survey
+      if ($pid) $field = l(t('Goto'), 'provider/overview/' . $pid);
+// If there is no provider-organisation set Survey field to a link to autoadd 
+	  else $field = l(t('Create'), 'provider/auto_add/' . $nid, array('query' => array('destination' => current_path())));
+	  $variables['rows'][$i]['nothing'] = $field;
+      $org = node_load($nid);
+	  $link = $GLOBALS['base_url'] . '/provider/intro/' . $org->uuid;
+	  $subject = 'Invitation to ICT-AGRI survey of agricultural ICT providers';
+	  $body = '';
+	  if (!empty($row['field_contact_person'])) $body.= /*'Dear ' . */ $row['field_contact_person'] . ', ';
+//	  else $body.= 'To the manager of ';
+	  $body.= strip_tags($row['title']);
+	  $body.= '%0D%0A' . '%0D%0A';
+      $body.= 'ICT-AGRI, a European initiative that funds research and development on ICT in agriculture, is conducting a survey among providers of ICT to farmers. (The term  ICT provider is interpreted very broadly, and encompasses all companies and organisations that use ICT in their business relationships with farmers.) The purpose is to get an overview of agricultural ICT providers in Europe and the services they provide to farmers. A special focus of the survey is on the current use and interest for interoperability and data sharing. ';
+      $body.= 'ICT-AGRI will use the information from the survey in the planning of upcoming calls for European projects about improving the use of ICT in agriculture.';
+	  $body.= '%0D%0A' . '%0D%0A';
+      $body.= 'By responding to the survey you will automatically be informed about calls for projects. You may be invited to participate in projects and you can search the ICT-AGRI database for partners for your own projects. The first call, to be announced in August 2014, is in collaboration with SmartAgriFood, another European funding initiative. This call will give financial and technical support to web developers and SMEs concerning use of Future Internet technologies.';
+	  $body.= '%0D%0A' . '%0D%0A';
+      $body.= 'You can read more about ICT-AGRI at http://ict-agri.eu.';
+	  $body.= '%0D%0A' . '%0D%0A';
+	  $body.= 'With kind regards, ICT-AGRI';
+	  $body.= '%0D%0A' . '%0D%0A';
+	  $body.= 'Participate in the survey by this link:';
+	  $body.= '%0D%0A';
+	  $body.= $link;
+	  
+      $email = '<a href="mailto:' . $row['field_email'] . '?subject=' . $subject . '&body=' . $body . '">Open mail</a>';
+// Use email if email address is given and organisation is added to survey ($pid != null)
+      $variables['rows'][$i]['field_email'] = null;
+	  if (empty($row['field_email'])) $variables['rows'][$i]['field_email'] = 'No address';
+	  elseif (!$pid) $variables['rows'][$i]['field_email'] = 'Create survey';
+      else {
+	    $field = $email;
+		$field.= '<br>';
+		// Log url - see function mkb_providers_invite_log_function()
+		$field.= l('Log', 'provider/invite_log/' . $pid, array('query' => array('destination' => 'provider-organisation/' . $view -> args[0]) ) );
+		// Read and print log value
+        $query = db_select('field_data_field_provider_invited', 'p');
+        $query
+          ->fields('p', array('field_provider_invited_value'))
+          ->condition('p.entity_id', $pid);
+        $result = $query->execute()->fetchAll();
+        if (!empty($result)) $invited = $result[0] -> field_provider_invited_value;
+        else $invited = 0;
+		if ($invited) {
+		  $field.= ' ';
+		  $field.= date('d-m',$invited);
+		}
+		$variables['rows'][$i]['field_email'] = $field;
+	  }
+	  // Response field - read and print data from survey responses
+	  $field = '';
+      if ($pid) {
+        $result = get_survey_response_types($pid);
+	    if (!empty($result)) {
+		  foreach($result as $response) {
+		    if ($field) $field.= '<br>';
+		    $field.= substr($response -> bundle,9);
+		  }
+        }			
+      }
+	  $variables['rows'][$i]['nothing_1'] = $field;
+    }
+  }
+}
+
+
+/*
+ * Helper function
+ * Returns survey response types and ids to responses, if any
+ */
+function get_survey_response_types($pid) {
+  $query = db_select('field_data_field_provider_id', 'p');
+  $query
+    ->fields('p', array('bundle', 'entity_id'))
+    ->condition('p.field_provider_id_target_id', $pid);
+  $result = $query->execute()->fetchAll();
+  return $result;
+}
+
+
+/*
+ * Implementation of hook_form_alter()
+ */
+function mkb_providers_form_alter(&$form, &$form_state, $form_id) {
+
+// Set default title and hide title field
+  if ($form_id == "provider_organisation_node_form") {
+    $form['title']['#default_value'] = 'ICT provider';
+    $form['title']['#access'] = FALSE;
+	// Reset the select list to only organisations from user's country (except for admins) and only ICT providers (disabled)
+    // $form['field_parent_organisation']['und']['#options'] = mkb_providers_parent_organisation_options();
+  }
+
+// Add provider id to entities and add destination to provider overview
+  if (substr_count($form_id, "provider_profile") ||
+      substr_count($form_id, "provider_compatibility") ||
+	  substr_count($form_id, "provider_share_case")) {
+    // Get the provider id from the url
+	$url_comp = explode('/', request_uri());
+    foreach($url_comp as $comp) {
+	  if (is_numeric($comp)) {
+	    $_id = $comp;
+	  }
+	}
+    if (!empty($_id)) {
+	  $provider_id = $_id;
+	  if (empty($form['field_provider_id']['und']['#default_value'])) { // Create new instance
+	    $form['field_provider_id']['und']['#default_value'][0] = $provider_id; // Set provider id field
+	    $_GET['destination'] = 'provider/overview/' . $provider_id; // Return to the overview after saving
+	  }
+	  else { // Edit existing instance
+        $provider_id = $form['field_provider_id']['und']['#default_value'][0];
+        $type = $form['#bundle'];
+	    $destination = 'provider/overview/' . $provider_id;
+		$access = mkb_providers_access($_id,$type);
+    	if (!$access) {
+	      drupal_set_message("You are not authorized to access the requested page");
+		  drupal_goto($destination);
+	    }
+	    $_GET['destination'] = $destination;
+	  }
+    }
+	$provider_name = node_load($provider_id) -> title;
+	$form['#groups']['group_provider_form_group'] -> label = $provider_name;
+    $form['field_provider_id']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Helper function to mkb_providers_form_alter()
+ * Edit access is granted to entity author and project members
+ */
+function mkb_providers_access($id,$type) {
+  $query = db_select('eck_provider', 'p');
+  $query
+  ->fields('p', array('uid'))
+  ->condition('p.id', $id)
+  ->condition('p.type', $type);
+  $result = $query->execute()->fetchAll();
+  if (!empty($result)) $uid = $result[0] -> uid;
+  else $uid = 0;
+  global $user;
+  if ($uid && $user->uid == $uid) return TRUE;
+  if (in_array('administrator', $user->roles)) return TRUE;
+  if (in_array('project member', $user->roles)) return TRUE;
+  return FALSE;
+}
+
+/**
+ * Implementation of hook_node_presave()
+ */
+function mkb_providers_node_presave($node) {
+  if ($node -> type == 'provider_organisation') {
+    $field_provider_parent = $node -> field_provider_parent['und'][0]['target_id'];
+	$parent = node_load($field_provider_parent);
+	$node -> title = $parent -> title;
+  }
+}
+
+/**
+ * @param $pid
+ *   Provider's organisation ID.
+ * @return $status
+ *   Status message.
+  */
+function mkb_providers_auto_add_function($pid){
+	if(isset($pid)){
+		$org = node_load($pid);
+		if($org->type == "organisation"){
+			mkb_providers_create_provider_organisation_node($pid);
+		}
+		else{
+			drupal_set_message("Argument is not an organisation node id", "warning");
+		}
+	}
+	else{
+		drupal_set_message("Error: Organisation is not submitted as provider. If problem persist please contact the administrator.", "warning");
+	}
+	drupal_goto('provider-organisation');
+}
+
+function mkb_providers_create_provider_organisation_node($pid){
+	if(isset($pid)){
+		$org = node_load($pid);
+		if($org->type == "organisation"){
+			global $user;
+			$node = new stdClass();
+			$node->title = $org->title;
+			$node->type = "provider_organisation";
+			node_object_prepare($node);
+			$node->language = LANGUAGE_NONE;
+			$node->uid = $user->uid;
+			$node->status = 1;
+			$node->promote = 0;
+			$node->comment = 0;
+			// Entity reference field
+			$node->field_provider_parent[$node->language][] = array(
+				'target_id' => $org->nid,
+				'target_type' => 'node',
+			);
+			$node->field_provider_invited[$node->language][] = array(
+				'value' => 0,
+			);
+			$node = node_submit($node); // Prepare node for saving
+			node_save($node);
+			return $node -> nid;
+		}
+		else return false;
+	}
+	else return false;
+}
+
+/**
+ * @param $pid
+ *   Provider-organisation ID.
+ * @return $status
+ *   Status message.
+  */
+function mkb_providers_invite_log_function($pid){
+	if(isset($pid)){
+  	  db_update('field_data_field_provider_invited') 
+        -> fields(array('field_provider_invited_value' => time(), ))
+        -> condition('entity_id', $pid, '=')
+        -> execute();
+	  drupal_set_message("Invitation log updated.", "status");
+	}
+	else{
+	  drupal_set_message("Error: Invitation log update failed.", "warning");
+	}
+	drupal_goto('provider-organisation');
+}
+
+/**
+ * Generates content for overview template.
+ *
+ * @param $pid
+ *   Provider organisation ID
+ * @return template
+ *   The rendered template mkb_providers_overview_template.
+ */
+function mkb_providers_overview_function($pid){
+  if(isset($pid)){
+    $variables = array();
+    $provider = node_load($pid);
+    $profile = mkb_providers_get_type($pid, 'provider_profile');
+    $compatibility = mkb_providers_get_type($pid, 'provider_compatibility');
+    $share_case = mkb_providers_get_type($pid, 'provider_share_case');
+    $variables['provider'] = $provider;
+    $variables['profile'] = entity_view('provider', $profile, 'full');
+    $variables['compatibility'] = entity_view('provider', $compatibility, 'full');
+    $variables['share_case'] = $share_case;
+  }
+  return theme('mkb_providers_overview_template', $variables);
+}
+
+/**
+ * Generates content for intro template.
+ *
+ * @param $pid
+ *   Provider's organisation UUID
+ * @return template
+ *   The rendered template mkb_providers_intro_template.
+ */
+function mkb_providers_intro_function($uuid){
+  $nid = mkb_get_node_id_from_uuid($uuid);
+  // Store provider node id in SESSION - load pid, if missing, from SESSION
+  if (isset($nid) && !isset($_SESSION['nid'])) $_SESSION['nid'] = $nid;
+  if (!isset($nid) && isset($_SESSION['nid'])) $nid = $_SESSION['nid'];
+  if(isset($nid)){
+    $variables = array();
+    $provider = node_load($nid);
+    $variables['provider'] = $provider;
+  }
+  return theme('mkb_providers_intro_template', $variables);
+}
+
+/**
+ * Generates content for start template.
+ *
+ * @param none
+ * Page is created in theme/start.php
+ * @return nothing
+ */
+function mkb_providers_start_function(){
+  $variables = array();
+  return theme('mkb_providers_start_template', $variables);
+}
+
+/**
+ * Generates content for stats template.
+ *
+ * @param none
+ * Page is created in theme/stats.php
+ * @return nothing
+ */
+function mkb_providers_stats_function($type){
+  $variables = array();
+  $valid_types = array('profile', 'compatibility');
+  if (!in_array($type, $valid_types)) {
+    return theme('mkb_providers_survey_stats_template', $variables);
+  }
+  $variables['response_type'] = $type;
+  $field_type = 'provider_' . $type;
+  $fields = field_info_instances('provider', $field_type);
+  $response_stats = array();
+  $response_order = array();
+  foreach ($fields as $field_name => $field) {
+    $display_type = $field['display']['default']['type'];
+	if ($display_type == 'list_default') {
+	  $response_order[$field_name] = $field['display']['default']['weight'];
+	  $response_stats[$field_name] = array(
+	    'label' => $field['label'],
+		'description' => $field['description'],
+	  );
+	  $field_info = field_info_field($field_name);
+	  $response_stats[$field_name]['allowed_values'] = $field_info['settings']['allowed_values'];
+	  foreach ($response_stats[$field_name]['allowed_values'] as $i => $option) {
+	    $response_stats[$field_name]['counts'][$i] = 0;
+	  }
+	}
+  }
+  $responses = entity_load('provider');
+  $response_count = 0;
+  foreach($responses as $response) {
+    if ($response->type == $field_type) {
+	  $response_count++;
+      foreach ($response_stats as $field_name => $field) {
+	    if (!empty($response -> $field_name)) {
+          $field_responses = $response -> $field_name;
+		  foreach ($field_responses['und'] as $delta => $value) {
+		    $i = $value['value'];
+		    $response_stats[$field_name]['counts'][$i] += 1;
+		  }
+		}
+	  }
+	}
+  }
+  asort($response_order);
+  foreach ($response_order as $field_name => $option) {
+    $variables['response_stats'][$field_name] = $response_stats[$field_name];
+  }
+  $variables['response_count'] = $response_count;
+  return theme('mkb_providers_survey_stats_template', $variables);
+}
+
+/**
+ * Generates content for survey responses template.
+ *
+ * @param none
+ * Page is created in theme/stats.php
+ * @return nothing
+ */
+function mkb_providers_responses_function($filter_field,$filter_value){
+  $field_info = field_info_field($filter_field);
+  $allowed_values = $field_info['settings']['allowed_values'];
+  reset($allowed_values);
+  $filter = '';
+  $i = 0;
+  foreach ($allowed_values as $key => $string) {
+    if ($i == $filter_value) $filter = $string;
+    $i++;
+  }
+  $variables = array();
+  $variables['responses'] = array();
+  $variables['filter'] = $filter;
+  $responses = entity_load('provider');
+  foreach($responses as $response) {
+    $hit = FALSE;
+    if ($response->type == 'provider_profile') {
+// Tjek på filter argumenter
+      if (!empty($response -> $filter_field)) {
+	    $values = $response -> $filter_field;
+		foreach ($values['und'] as $delta => $value) {
+		  if ((int)$value['value'] == (int)$filter_value) $hit = TRUE;
+		}
+	  }
+	}
+    if ($hit) {	
+	  $provider_organisation = node_load($response -> field_provider_id['und'][0]['target_id']);
+	  if ($provider_organisation) {
+	    $provider_parent = node_load($provider_organisation -> field_provider_parent['und'][0]['target_id']);
+	    if ($provider_parent) {
+ 	      $variables['responses'][$response -> id]['profile'] = $response;
+          $variables['responses'][$response -> id]['user'] = user_load($response -> uid);
+          $variables['responses'][$response -> id]['parent'] = $provider_parent;
+		}
+	  }
+	}
+  }
+  return theme('mkb_providers_survey_responses_template', $variables);
+}
+
+function mkb_providers_get_type($pid, $bundle){
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'provider')
+    ->entityCondition('bundle', $bundle)
+    ->fieldCondition('field_provider_id', 'target_id', $pid, '=');
+  $result = $query->execute();
+  $entities = array();
+  if (isset($result['provider'])) {
+    $entities_id = array_keys($result['provider']);
+    $entities = entity_load('provider', $entities_id);
+  }
+  return $entities;
+}
+
+/**
+ * Get provider-organisation node id via provider parent field
+ */
+// 
+function mkb_providers_get_parent_organisation_id($pid) {
+  $query = db_select('field_data_field_provider_parent', 'pp');
+  $query
+  ->fields('pp', array('entity_id'))
+  ->condition('pp.field_provider_parent_target_id', $pid);
+  $result = $query->execute()->fetchAll();
+  if (!empty($result)) $po_id = $result[0] -> entity_id;
+  else $po_id = null;
+  return $po_id;
+}
+
+/**
+ * Get providers organisation node id from the node's uuid
+ */
+// 
+function mkb_get_node_id_from_uuid($uuid) {
+  $query = db_select('node', 'n');
+  $query
+  ->fields('n', array('nid'))
+  ->condition('n.uuid', $uuid);
+  $result = $query->execute()->fetchAll();
+  return $result[0] -> nid;  
+}
+
+/**
+ * Get link to current user's survey response
+ */
+// 
+function mkb_providers_get_node_id_from_author() {
+  if (!user_is_logged_in()) {
+    $msg = '<strong>You are not logged in</strong>';
+	return $msg;
+  }
+  global $user;
+  $uid = $user->uid;
+  $email = $user->mail;
+// Look after user id in provider_profile = existing response
+  $result = mkb_providers_get_profile_by_user($uid);
+  if ($result) { 
+    foreach($result as $row ) {
+	  $links = '<br>' . l('Survey response for ' . $row -> title, 'provider/overview/' . $row -> nid);  
+	}
+    return $links;
+  }
+// Look after user's email in an organisation as parent for a provider_organisation
+  $query = db_select('node','n');
+  $query->leftJoin("field_data_field_email", "em", "em.entity_id = n.nid");
+  $query->leftJoin("field_data_field_provider_parent", "pp", "pp.field_provider_parent_target_id = n.nid");
+  $query
+  ->fields('n', array('title','uuid'))
+  ->condition('em.field_email_value', $email)
+  ->condition('n.type', 'organisation')
+  ->condition('em.bundle', 'organisation')
+  ->condition('pp.bundle', 'provider_organisation')
+  ;
+  $result = $query->execute()->fetchAll();
+  if ($result) { 
+    foreach($result as $row ) {
+	  $links = '<br>' . l('Survey invitation for ' . $row -> title, 'provider/intro/' . $row -> uuid);  
+	}
+  return $links;
+  }
+// Nothing found
+  $links = '<strong>You do not have a survey response or an invitation for a survey response</strong>';
+  return $links;
+}
+
+
+/**
+ * Find and return id to a user's provider_profile
+ */
+function mkb_providers_get_profile_by_user($uid) {  
+  $query = db_select('eck_provider','ep');
+  $query->leftJoin("field_data_field_provider_id", "pi", "pi.entity_id = ep.id");
+  $query->leftJoin("node", "n", "n.nid = pi.field_provider_id_target_id");
+  $query
+  ->fields('n', array('title','nid'))
+  ->condition('ep.uid', $uid)
+  ->condition('ep.type', 'provider_profile')
+  ->condition('pi.bundle', 'provider_profile')
+  ->condition('n.type', 'provider_organisation')
+  ;
+  $result = $query->execute()->fetchAll();
+  return $result;
+}
+
+/**
+ * Used to sort fields in providers/overview
+ */
+function mkb_providers_sort($a, $b){
+  return $a['display']['default']['weight'] - $b['display']['default']['weight'];
+}
+
+/**
+ * Register custom action info.
+ * 
+ * @return array
+ * 	array of action info for view bulk operation. See https://www.drupal.org/node/2052067 for more info.
+*/
+function mkb_providers_action_info() {
+  return array(
+    'mkb_providers_survey_mail_action' => array(
+      'type' => 'node',
+      'label' => t('Send mail to invite survey participants'),
+      'configurable' => FALSE,
+      'vbo_configurable' => TRUE,
+      'triggers' => array('any'),
+    ),
+  );
+}
+
+/**
+ * @options
+ *  options form elements to display in view
+ * @return form
+ * 	form
+*/
+function mkb_providers_survey_mail_action_views_bulk_operations_form($options) {
+  $form = array();
+  $form['subject'] = array(
+    '#type' => 'textfield', 
+    '#title' => t('Email subject'), 
+    '#size' => 60, 
+    '#maxlength' => 128, 
+    '#default_value' => !empty($options['subject']) ? $options['subject'] : '',
+  );
+  $form['body'] = array(
+    '#title' => t('Email body'),
+    '#type' => 'text_format',
+    '#rows' => 10,
+    '#description' => t('Please enter the email body'),
+    '#default_value' => !empty($options['body']['value']) ? $options['body']['value'] : '',
+    '#format'=> !empty($options['body']['format']) ? $options['body']['format'] : 'plain_text',
+  );
+  
+  return $form;
+}
+
+/**
+ * This form will display after selecting row(s) in view and clicking execute.
+ * 
+ * @param $settings
+ *  settings from view
+ * @form_state
+ * 	form_state
+ * @return form
+ * 	form
+*/
+function mkb_providers_survey_mail_action_form($settings, &$form_state) {
+  $form = array();
+  $form['subject'] = array(
+    '#type' => 'textfield', 
+    '#title' => t('Email subject'), 
+    '#size' => 60, 
+    '#maxlength' => 128, 
+    '#required' => TRUE,
+    '#default_value' => isset($settings['settings']['subject']) ? $settings['settings']['subject'] : '',
+  );
+  $form['body'] = array(
+    '#title' => t('Email body'),
+    '#type' => 'text_format',
+    '#rows' => 10,
+    '#description' => t('Please enter the email body. The link with automatically be inserted in the bottom of the mail.'),
+    '#default_value' => isset($settings['settings']['body']['value']) ? $settings['settings']['body']['value'] : '',
+    '#format'=> isset($settings['settings']['body']['format']) ? $settings['settings']['body']['format'] : 'plain_text',
+  );  
+  return $form;
+}
+
+/**
+ * @param $form
+ *  form
+ * @form_state
+ * 	form_state
+ * @return return
+ * 	array of form elements for the action function
+*/
+function mkb_providers_survey_mail_action_submit($form, $form_state) {
+  $return = array();
+  $return['subject'] = $form_state['values']['subject'];
+  $return['body'] = $form_state['values']['body'];
+  // Add view to form_state to use in mkb_providers_survey_mail_action
+  $return['storage']['view'] = $form_state['build_info']['args'][0]->result;
+  return $return;
+}
+
+/**
+ * Sends mail to participant.
+ * NOTE: This funtion is called for each row selected in the view.
+ *
+ * @param $node
+ *  Organisation node
+ * @context
+ * 	View context (Fields from mkb_providers_survey_mail_action_submit (subject, email and view)).
+*/
+function mkb_providers_survey_mail_action(&$node, $context) {
+  $module = 'mkb_providers';
+  $key = 'mkb_providers_survey';
+  $site_name = variable_get('site_name', '');
+  $mail_send = TRUE;
+
+  // Get selected row
+  $selected_row = 0;
+  foreach($context['storage']['view'] as $i => $row){
+    if($node->nid == $row->nid) $selected_row = $row;
+  }	
+
+  $account = $GLOBALS['user'];
+  $account = user_load($account->uid);
+	
+  // Email adress from view and send copy to the user sending the emails
+  $recipient = $selected_row->field_field_email[0]['raw']['value'];
+  $to = $recipient;
+	
+  $from = $account->realname . ' <' . $account->mail . '>';
+  
+  $body = str_replace(array('[Link will be inserted]'), array('http://ict-agri.eu/provider/intro/' . $selected_row->node_uuid), $context['body']['value']);
+  $body = str_replace(array('[Your name will be inserted]'), array('<p>' . $account->realname . '</p>'), $body);
+  $params = array(
+    'body' => render($body),
+    'subject' => $context['subject'],
+  );
+
+  $language = language_default();
+  $send = TRUE;
+  $result = drupal_mail($module, $key, $to, $language, $params, $from, $send);
+
+  // Set message according to email status
+  if ($result['result'] == TRUE) {
+    drupal_set_message('Email send to: ' . $to);
+    watchdog('Survey Mail', $account->realname . ' has send email to ' . $recipient);
+  }
+  else {
+    drupal_set_message('Error sending email to: ' . $to, 'error');
+  }
+}
+
+/**
+ * Requires key to be set in mail system for mkb_providers.
+ * HTML mail and mail system must be installed.
+ * 
+ * Note: configure mail key and corresponding mail system in "Configuration->System->Mail System" and
+ * add new settings for mkb_providers with the key used in this function. Next select the "Mail system"
+ * to be used to send mails (eg. Drupal mail).
+ * 
+ * Implements hook_mail().
+ */
+function mkb_providers_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'mkb_providers_survey':
+      $headers = array(
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'text/html; charset=UTF-8; format=flowed',
+        'Content-Transfer-Encoding' => '8Bit',
+        'X-Mailer' => 'Drupal'
+      );
+      foreach ($headers as $key => $value) {
+        $message['headers'][$key] = $value;
+      }
+      $message['subject'] = $params['subject'];
+      $message['body'][] = $params['body'];
+      break;
+  }
+}

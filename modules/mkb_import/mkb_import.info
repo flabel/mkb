@@ -1,0 +1,8 @@
+name = MKB import
+package = Meta Knowledge Base
+description = Module to import content from csv
+core = 7.x
+dependencies[] = migrate
+files[] = my_module.migrate.inc
+files[] = includes/basic.inc
+files[] = includes/organisation.inc

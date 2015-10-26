@@ -1,0 +1,221 @@
+<?php
+
+include_once 'mkb_pm.features.inc';
+
+module_load_include('inc', 'mkb_pm', 'includes/blocks/mkb_pm.rapports_block');
+module_load_include('inc', 'mkb_pm', 'includes/blocks/mkb_pm.questionnaire_block');
+
+module_load_include('inc', 'mkb_pm', 'includes/form_alter/mkb_pm.questionnaire_1');
+
+module_load_include('inc', 'mkb_pm', 'includes/pages/mkb_pm.evaluation_overview');
+module_load_include('inc', 'mkb_pm', 'includes/pages/mkb_pm.guide_page');
+module_load_include('inc', 'mkb_pm', 'includes/pages/mkb_pm.rapport_page');
+module_load_include('inc', 'mkb_pm', 'includes/pages/mkb_pm.questionnaire');
+
+module_load_include('inc', 'mkb_pm', 'includes/forms/mkb_eval.rapport_comment');
+/**
+ * @file
+ * Demonstrate module mkb_pm.
+ */
+
+/**
+ * Implements hook_menu()
+ */
+function mkb_pm_menu(){
+  // FORMS
+  $items['groups/workspace/rapport_comment/%/%'] = array(
+    'description' => 'This page collates the data provided by the project consortium into a rapport
+      that users can add comments to.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('mkb_pm_rapport_comment_form',3,4),
+    'access arguments' => array(3),
+    'access callback' => 'mkb_pm_rapport_page_access',
+    'file' => 'includes/forms/mkb_pm.rapport_comment.inc',        
+    'type' => MENU_NORMAL_ITEM,    
+  );
+  // PAGES
+  $items['eval_rapport/%/%'] = array(
+    'title' => '',
+    'description' => 'Evaluation views',
+    'page callback' => 'mkb_pm_evaluation_overview',
+    'page arguments' => array(1,2),
+    'access callback' => 'mkb_pm_rapport_page_access',
+    'access arguments' => array(1),
+    'file' => 'includes/pages/mkb_pm.evaluation_overview.inc',    
+    'type' => MENU_CALLBACK,
+  );  
+  $items['groups/workspace/guide/%/%'] = array(
+    'title' => '',
+    'description' => 'Content from Application publish configuration body and templates.',
+    'page callback' => 'mkb_pm_guide',
+    'page arguments' => array(3,4),
+    'access arguments' => array(3),
+    'access callback' => 'mkb_groups_members_access',
+    'file' => 'includes/pages/mkb_pm.guide_page.inc',        
+    'type' => MENU_NORMAL_ITEM,
+  );  
+  $items['groups/workspace/rapport/%/%'] = array(
+    'title' => '',
+    'description' => 'This page collates the data provided by the project consortium into a rapport.',
+    'page callback' => 'mkb_pm_application_rapport',
+    'page arguments' => array(3,4),
+    'access arguments' => array(3),
+    'access callback' => 'mkb_groups_members_access',
+    'file' => 'includes/pages/mkb_pm.rapport_page.inc',        
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['groups/workspace/questionnaire/%/%'] = array(
+    'title' => '',
+    'description' => 'Questionnaires',
+    'page callback' => 'mkb_pm_questionnaire',
+    'page arguments' => array(3,4),
+    'access callback' => 'mkb_groups_members_access',
+    'access arguments' => array(3),
+    'file' => 'includes/pages/mkb_pm.questionnaire.inc',    
+    'type' => MENU_CALLBACK,
+  );
+  
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mkb_pm_theme($existing, $type, $theme, $path) {
+  $templates = array (
+      'rapport_overview_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'rapport_overview_page',
+          'path' => drupal_get_path('module', 'mkb_pm') . '/theme',
+      ),
+      'guide_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'guide_page',
+          'path' => drupal_get_path('module', 'mkb_pm') . '/theme',
+      ),
+      'rapport_template' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'rapport_page',
+          'path' => drupal_get_path('module', 'mkb_pm') . '/theme',
+      ),
+      'questionnaire' => array(
+          'arguments' => array('custom_variables' => NULL),
+          'template' => 'questionnaire',
+          'path' => drupal_get_path('module', 'mkb_pm') . '/theme',
+      ),
+  );
+  return $templates;
+}
+
+/**
+ * @param cid
+ *  call-main-page node id
+ * @return access
+ *  access to this page
+ */
+function mkb_pm_rapport_page_access($cid){
+  return TRUE;
+}
+
+
+
+///**
+ //* Implements hook_node_prepare().
+ //*/
+//function mkb_pm_node_prepare($node) {
+  //if ($node->type == 'application_project_publish') {
+    //mkb_application_group_content_control($node, FALSE);
+  //}
+//}
+
+/**
+ * Implements hook_form_alter()
+ */
+function mkb_pm_form_alter(&$form, $form_state, $form_id) {
+  if ($form_id == "application_project_publish_node_form") {
+    if (isset($_SESSION["mkb_gid"])) {
+      $gid = $_SESSION["mkb_gid"];
+      $cid = mkb_application_get_call_main_nid($gid);
+      
+      // Get data from project-info and set other fields that hidden
+      $group_content = mkb_application_get_group_content($gid, 'application_project_info');
+      if($group_content[0]){
+        $project_info_wrapper = entity_metadata_wrapper('node', $group_content[0]);
+        // Summary
+        if(!isset($form['body'][LANGUAGE_NONE][0]['#default_value'])){
+          $pi_summary = $project_info_wrapper->field_app_summary->value();
+          if($pi_summary) $form['body'][LANGUAGE_NONE][0]['#default_value'] = nl2br($pi_summary);
+        }
+        
+        // Title
+        if(!isset($form['title']['#default_value'])){
+          $title = $project_info_wrapper->label();          
+          $form['title']['#default_value'] = isset($title) ? $title : '';
+        }
+        
+        // OG ref
+        $form['og_group_ref'][LANGUAGE_NONE]['#default_value'] = $gid;
+        $form['og_group_ref']['#access'] = FALSE;
+      }
+      else  drupal_goto('groups/workspace/' . $gid);
+    }
+    // Webform
+    $arg = arg();
+    $webform_id = 0;
+    if(count($arg) >= 2){
+      if($arg[0] == 'node' && is_numeric($arg[1])){
+        $node = node_load($arg[1]);
+        if($node->type == 'webform') $webform_id = 'webform_client_form_' . $arg[1];
+      }
+    }
+    if ($form_id == $webform_id) { 
+      $form = mkb_pm_questionnaire_1($form, $form_state, $form_id);
+    }  
+  }
+}
+
+/**
+ * Implements hook_block_info()
+ */
+function mkb_pm_block_info() {
+  $blocks['rapports'] = array(
+    'info' => 'Rapports',
+    'status' => TRUE,
+    'region' => 'sidebar_first',
+    'weight' => -20,
+  );
+  $blocks['questionnaire'] = array(
+    'info' => 'Project evaluation',
+    'status' => TRUE,
+    'region' => 'sidebar_first',
+    'weight' => -21,
+  );
+  return $blocks;
+}
+
+/**
+ * Note mkb_groups_block_visibility('groups'): application block has same visibility settings as groups block
+ * @see mkb_groups_block_visibility($delta = '')
+ *
+ * Implements hook_block_view()
+ */
+function mkb_pm_block_view($delta = '') {
+  $block = array();
+  if ($delta == 'rapports') {
+    if (mkb_groups_block_visibility('groups')) {
+      $block = array(
+        'subject' => 'Rapports',
+        'content' => mkb_pm_rapports_block_content(),
+      );
+    }
+  }
+  if ($delta == 'questionnaire') {
+    if (mkb_groups_block_visibility('groups')) {
+      $block = array(
+        'subject' => 'Project evaluation',
+        'content' => mkb_pm_questionnaire_block_content(),
+      );
+    }
+  }  
+  return $block;
+}
